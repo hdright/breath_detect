@@ -13,6 +13,8 @@
 └── README.md
 ```
 
+呼吸 BPM 为 10~40，即 *0.16~0.66 Hz*，不算婴儿则为 10~30，即 *0.16~0.5 Hz*
+
 ## 数据格式
 
 ### Cfg
@@ -26,8 +28,8 @@
 - `Nsc`：子载波数，`int`
 - `Nt`：各样本时域测量次数，`int[Nsamp]`
 - `Tdur`：各样本信号采集持续时间（秒），`int[Nsamp]`
-- `fstart`：第一个子载波中心频率（Mhz），`float`
-- `fend`：最后一个子载波中心频率（Mhz），`float`
+- `fstart`：第一个子载波中心频率（MHz），`float`
+- `fend`：最后一个子载波中心频率（MHz），`float`
 
 ### CSI
 
