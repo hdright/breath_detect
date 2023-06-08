@@ -1,0 +1,24 @@
+/*
+ * Filename: /home/zyf/lab/Breath_Detect/.vscode/launch.json
+ * Path: /home/zyf/lab/Breath_Detect/.vscode
+ * Created Date: Thursday, June 8th 2023, 9:24:01 pm
+ * Author: Sciroccogti
+ * 
+ * Copyright (c) 2023 Your Company
+ */
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "chusai",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/chusai.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

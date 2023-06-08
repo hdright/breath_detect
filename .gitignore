@@ -1,4 +1,8 @@
+__pycache__
+
+*.npy
+
 chusai_data/CompetitionData1
 chusai_data/TestData
 outputs
-__pycache__
+
