@@ -1,0 +1,8 @@
+name: breath_detect
+channels:
+  - defaults
+dependencies:
+  - matplotlib
+  - numpy>=1.19
+  - pip
+  - python>=3.10.4
