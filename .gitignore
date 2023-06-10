@@ -1,6 +1,7 @@
 __pycache__
 
 *.npy
+*.zip
 
 chusai_data/CompetitionData1
 chusai_data/TestData

@@ -3,11 +3,12 @@
 @author Sciroccogti (scirocco_gti@yeah.net)
 @brief 
 @date 2023-06-08 13:40:24
-@modified: 2023-06-08 21:43:40
+@modified: 2023-06-09 11:22:00
 '''
 
 import numpy as np
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, savgol_filter
+from sklearn.preprocessing import scale
 
 def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
     '''
@@ -37,11 +38,6 @@ def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
 
     Hs = np.zeros((dftSize), dtype = complex)
 
-    for rx in range(Nrx):
-        for tx in range(Ntx):
-            for sc in range(Nsc):
-                H[rx][tx][sc] = Wdft @ CSI[rx][tx][sc] # 用 DFT 变换到频域
-                Hs += H[rx][tx][sc]
 
     filteredHs = np.zeros_like(Hs)
     ret = []
@@ -55,11 +51,15 @@ def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
         for rx in range(Nrx):
             for tx in range(Ntx):
                 for sc in range(Nsc):
+                    denoised = savgol_filter(np.abs(CSI[rx][tx][sc]), 8, 7) # 用Savitzky-Golay滤波器去噪
+                    amp = scale(denoised) # z-score 归一化
+                    psd = Wdft @ amp # 用 DFT 变换到频域
+                    # pha = scale(np.angle(denoised))
                     for BPMrangeI in range(len(BPMrange)):
                         minBPM, maxBPM = BPMrange[BPMrangeI]
                         minIndex, maxIndex = int(minBPM / BPMresol), int(maxBPM / BPMresol)
                         filteredHs = np.zeros_like(Hs, dtype=np.float64)
-                        filteredHs[minIndex: maxIndex] = np.abs(H[rx][tx][sc][minIndex:maxIndex])
+                        filteredHs[minIndex: maxIndex] = np.abs(psd[minIndex:maxIndex])
                         idx, _ = find_peaks(filteredHs, height = 0.001, distance = 1)
                         if len(idx) < 1:
                             continue
@@ -76,6 +76,13 @@ def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
 
         ret = np.array([WeightedSum / Amp * BPMresol])
     else:
+        for rx in range(Nrx):
+            for tx in range(Ntx):
+                for sc in range(Nsc):
+                    denoised = savgol_filter(np.abs(CSI[rx][tx][sc]), 8, 7)
+                    amp = scale(denoised) # z-score 归一化
+                    psd = Wdft @ amp # 用 DFT 变换到频域
+                    Hs += psd
         while len(ret) < Np:
             minBPM, maxBPM = BPMrange[BPMrangeI]
             BPMrangeI += 1

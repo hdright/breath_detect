@@ -89,6 +89,9 @@ class SampleSet:
                                               self.Cfg['Ntx'], self.Cfg['Nsc'], self.Cfg['Nt'][ii]))
         for ii in range(self.Cfg['Nsamp']):
             # br = EstBreathRate(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
+            # 如不存在CSI_s[ii]的npy文件，则保存
+            if not os.path.exists('/data/hdr/breath_detect/CSI_s_{}.npy'.format(ii)) and ii<10:
+                np.save('/data/hdr/breath_detect/CSI_s_{}.npy'.format(ii), self.CSI_s[ii])
             br = estChusai(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
             BR.append(br)
         self.Rst = BR
