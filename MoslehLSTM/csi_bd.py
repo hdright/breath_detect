@@ -58,7 +58,7 @@ class model_trainer():
                  linear_dim=250,
                  mid_layers=2,
                  batch_size=30,
-                 learning_rate=1e-2,
+                 learning_rate=1e-3,
                  lr_decay_freq=30,
                  lr_decay=0.1,
                  best_loss=100,
@@ -174,7 +174,7 @@ class model_trainer():
                     
                 end = time.time()
                 t = end - start
-                self.average_loss = self.total_loss / len(self.test_dataset) * 90
+                self.average_loss = self.total_loss / (i+1)
                 # print("len(self.test_dataset):", len(self.test_dataset))
                 # self.average_rho = self.total_rho / len(list(enumerate(self.test_loader)))
                 self.x_label.append(epoch)
