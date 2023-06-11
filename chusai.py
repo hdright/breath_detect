@@ -3,7 +3,7 @@
 @author Sciroccogti (scirocco_gti@yeah.net)
 @brief 
 @date 2023-06-08 12:08:24
-@modified: 2023-06-08 19:04:47
+@modified: 2023-06-09 23:54:32
 '''
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
@@ -13,7 +13,7 @@
 import os, time
 import numpy as np
 from itertools import accumulate
-from estBreath import estChusai
+from estBreath import estChusai, estMultisense
 #numpy 1.19
 
 
@@ -89,10 +89,8 @@ class SampleSet:
                                               self.Cfg['Ntx'], self.Cfg['Nsc'], self.Cfg['Nt'][ii]))
         for ii in range(self.Cfg['Nsamp']):
             # br = EstBreathRate(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
-            # 如不存在CSI_s[ii]的npy文件，则保存
-            if not os.path.exists('/data/hdr/breath_detect/CSI_s_{}.npy'.format(ii)) and ii<10:
-                np.save('/data/hdr/breath_detect/CSI_s_{}.npy'.format(ii), self.CSI_s[ii])
             br = estChusai(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
+            # br = estMultisense(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
             BR.append(br)
         self.Rst = BR
 
@@ -162,7 +160,7 @@ def ReadWave(fn):
     return Wave
 
 if __name__ == "__main__":
-    print("<<< 水之波动 一之型 >>>\n")
+    print("<<< 水之波动 二之型 >>>\n")
     ## 不同轮次的输入数据可放在不同文件夹中便于管理，这里用户可以自定义
     PathSet = {0:"./TestData", 1:"./CompetitionData1", 2:"./CompetitionData2", 3:"./CompetitionData3", 4:"./CompetitionData4"}
     PrefixSet = {0:"Test" , 1:"Round1", 2:"Round2", 3:"Round3", 4:"Round4"}
