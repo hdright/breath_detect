@@ -126,7 +126,7 @@ class SampleSet:
 
 
 
-def FindFiles(PathRaw):
+def FindFiles(PathRaw, verbose = True):
     dirs = os.listdir(PathRaw)
     names = []  #文件编号
     files = []
@@ -135,7 +135,8 @@ def FindFiles(PathRaw):
             files.append(f)
     for f in sorted(files):
         if f.find('CfgData')!= -1 and f.endswith('.txt'):
-            print('Now reading file {} ...\n'.format(f))
+            if verbose:
+                print('Now reading file {} ...\n'.format(f))
             names.append(f.split('CfgData')[-1].split('.txt')[0])
     return names, files
 
