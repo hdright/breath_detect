@@ -6,4 +6,5 @@ __pycache__
 chusai_data/CompetitionData1
 chusai_data/TestData
 outputs
-
+model_save
+mnist

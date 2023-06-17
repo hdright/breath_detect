@@ -11,11 +11,12 @@ import os
 import torch.nn as nn
 import random
 import time
+import pickle
 
 # from bdn.loss import NMSE_cuda, NMSELoss, CosSimilarity, rho
 from bdn.backbone import RegLSTM, BDCNN
 from bdn.data_old import load_data
-from bdn.data import load_data_from_txt
+from bdn.data import load_data_from_txt, save_data_to_txt
 import matplotlib.pyplot as plt
 
 model_path = "./model_save"
@@ -53,6 +54,8 @@ class CNN_trainer():
                  epochs,
                 #  net,
                  #  feedbackbits=128,
+                 train_now=True,
+                 no_sample=320, # 设置读取哪种txt文件，90样本或者320样本
                  BPMresol = 1.0,
                  breathEnd = 1,
                  batch_size=1,
@@ -74,10 +77,11 @@ class CNN_trainer():
         self.print_freq = print_freq
         self.train_test_ratio = train_test_ratio
 
+        self.no_sample = no_sample  # 读取的样本数
         # 要估计的呼吸频率范围
         self.BPMresol = BPMresol
         self.breadthEnd = breathEnd
-        resol = BPMresol / 60  # 要分辨出0.1BPM，需要的频率分辨率
+        # resol = BPMresol / 60  # 要分辨出0.1BPM，需要的频率分辨率
         bpmRange = np.arange(0, 60, BPMresol)
         noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
 
@@ -104,24 +108,38 @@ class CNN_trainer():
         # self.train_shuffle_loader, self.test_shuffle_loader,        \
         # self.train_shuffle_dataset, self.test_shuffle_dataset = \
         #     load_data_from_txt('./train_data', shuffle=True)
-        self.train_shuffle_loader = load_data_from_txt(
-                                                        Ridx = 0, # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
-                                                        BPMresolution = BPMresol, # 设置BPM分辨率
-                                                        batch_size = batch_size, # 设置batch大小
-                                                        shuffle = True, # 设置是否打乱数据
-                                                        num_workers = 2, # 设置读取数据的线程数量
-                                                )
-        # self.test_loader = load_data_from_txt(
-        #                                                 Ridx = 1, # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
-        #                                                 BPMresolution = BPMresol, # 设置BPM分辨率
-        #                                                 batch_size = 1, # 设置batch大小
-        #                                                 shuffle = False, # 设置是否打乱数据
-        #                                                 num_workers = 2, # 设置读取数据的线程数量
-        #                                         )
+        if train_now:
+            if os.path.exists('./chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabel.pkl'):
+                print('Loading train_shuffle_loader...')
+                with open('./chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabel.pkl', 'rb') as f:
+                    self.train_shuffle_loader = pickle.load(f)
+            else:
+                self.train_shuffle_loader = load_data_from_txt(
+                                                                Ridx = 0, # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
+                                                                no_sample=no_sample, # 设置读取哪种txt文件，90样本或者320样本
+                                                                BPMresolution = BPMresol, # 设置BPM分辨率
+                                                                batch_size = batch_size, # 设置batch大小
+                                                                shuffle = True, # 设置是否打乱数据
+                                                                num_workers = 2, # 设置读取数据的线程数量
+                                                        )
+                with open('./chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabel.pkl', 'wb') as f:
+                    pickle.dump(self.train_shuffle_loader, f)
 
 
-    def model_save(self,encodername, decodername):
+
+    def model_save(self, name = "BDCNN", path = "./model_save"):
         print('Saving model...')
+        if not os.path.exists(path):
+            os.makedirs(path)
+        model_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+        model_name = name + '_' + model_time + '.pkl'
+        modelPATH = os.path.join(path, model_name)
+        torch.save({'state_dict': self.model.state_dict(), }, modelPATH)
+        # 保存模型结构
+        with open(os.path.join(path, model_name + '.txt'), 'w') as f:
+            print(self.model, file=f)
+        print('Model saved!')
+        
 #         encoderPATH = os.path.join(model_path, encodername)
 #         decoderPATH = os.path.join(model_path, decodername)
 #         try:
@@ -136,9 +154,11 @@ class CNN_trainer():
 # #         print('Model saved!')
 #         self.best_loss = self.average_loss
 
-    def model_load(self,encodername, decodername):
-        encoderPATH = os.path.join(model_path, encodername)
-        decoderPATH = os.path.join(model_path, decodername)
+    def model_load(self, name, path = "./model_save"):
+        print('Loading model...')
+        modelPATH = os.path.join(path, name)
+        model_dict = torch.load(modelPATH)
+        self.model.load_state_dict(model_dict['state_dict'], strict=False)  # type: ignore
 
         # encoder_dict = torch.load(encoderPATH)
         # self.model.encoder.load_state_dict(encoder_dict['state_dict'], strict=False)  # type: ignore
@@ -173,15 +193,38 @@ class CNN_trainer():
                 self.optimizer.step()
                 if i % self.print_freq == 0:
                     with torch.no_grad():
-                        pred_val = (torch.argsort(-output)[:, :cfg['Np']] * self.BPMresol).cpu()
-                        pred_val.sort()
-                        print("pred_val.shape:", pred_val.shape)
-                        print("pred_val:", pred_val)
-                        print("cfg['gt']:", cfg['gt'])
-                        rmse = torch.sqrt(torch.mean((pred_val[:cfg['Np']] - cfg['gt']) ** 2))
-                        print('Epoch: [{0}][{1}/{2}]\t'
-                            'Loss {loss:.4f}\t, RMSE {rmse:.4f}'.format(
-                            epoch, i, len(self.train_shuffle_loader), loss=loss.item(), rmse=rmse.item()))
+                        # print("type(output):", type(output))
+                        # print("type(cfg['Np']):", type(cfg['Np']))
+                        # print("cfg['Np'].numpy():", cfg['Np'].numpy()) 
+                        if self.batch_size == 1:
+                            # if batch size = 4, cfg['Np'].numpy(): [1 1 1 1], TypeError: only integer scalar arrays can be converted to a scalar index
+                            pred_val = (torch.argsort(-output)[:, :cfg['Np']] * self.BPMresol).cpu()
+                            # pred_val.sort(dim=1)
+                            pred_val = torch.sort(pred_val, dim=1)[0]
+                            print("pred_val.shape:", pred_val.shape)
+                            print("pred_val:", pred_val)
+                            print("cfg['gt']:", cfg['gt'])
+                            rmse = torch.sqrt(torch.mean((pred_val[:cfg['Np']] - cfg['gt'][:cfg['Np']]) ** 2))
+                            print('Epoch: [{0}][{1}/{2}]\t'
+                                'Loss {loss:.4f}\t, RMSE {rmse:.4f}'.format(
+                                epoch, i, len(self.train_shuffle_loader), loss=loss.item(), rmse=rmse.item()))
+                        else:
+                            rmse = torch.zeros(1)
+                            for iBatch in range(self.batch_size):
+                                # print("output.shape:", output.shape)
+                                # print("cfg['Np'].shape:", cfg['Np'].shape)
+                                # print("cfg['Np']:", cfg['Np'])
+                                pred_val = (torch.argsort(-output[iBatch])[:cfg['Np'][iBatch]] * self.BPMresol).cpu()
+                                pred_val = torch.sort(pred_val)[0]
+                                if i % self.print_freq == 10:
+                                    print("pred_val.shape:", pred_val.shape)
+                                    print("pred_val:", pred_val)
+                                    print("cfg['gt'][iBatch]:", cfg['gt'][iBatch])
+                                rmse += torch.sum((pred_val[:cfg['Np'][iBatch]] - cfg['gt'][iBatch][:cfg['Np'][iBatch]]) ** 2)
+                            rmse = torch.sqrt(rmse / torch.sum(cfg['Np']))
+                            print('Epoch: [{0}][{1}/{2}]\t'
+                                'Loss {loss:.4f}\t, RMSE {rmse:.4f}'.format(
+                                epoch, i, len(self.train_shuffle_loader), loss=loss.item(), rmse=rmse.item()))
             self.model.eval()
 
             # evaluating...
@@ -231,6 +274,39 @@ class CNN_trainer():
         #         channel_visualization(image2)
 
         # return self.x_label, self.y_label, sum(self.t_label)/len(self.t_label) # , self.ys_label
+
+    def model_predict(self, Ridx):
+        self.test_loader = load_data_from_txt(
+                                            Ridx = Ridx, # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
+                                            no_sample=self.no_sample, # 设置读取哪种txt文件，90样本或者320样本
+                                            BPMresolution = self.BPMresol, # 设置BPM分辨率
+                                            batch_size = 1, # 设置batch大小
+                                            shuffle = False, # 设置是否打乱数据
+                                            num_workers = 2, # 设置读取数据的线程数量
+                                    )
+        self.model.eval()
+        with torch.no_grad():
+            pred_val_file = [] # 每个文件的预测值列表
+            na_last = ['']  # Fix for possibly unbound variable
+            for _, (_, cfg) in enumerate(self.test_loader):
+                na_last = cfg['na']
+                break
+            print("Prediciting file: ", na_last)
+            for _, (x_in, cfg) in enumerate(self.test_loader):  # Fix for unused variable
+                x_in = x_in.cuda()
+                x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
+                output = self.model(x_in) #.squeeze()
+                pred_val = (torch.argsort(-output)[:, :cfg['Np']] * self.BPMresol).cpu()
+                pred_val = torch.sort(pred_val, dim=1)[0]
+                pred_val = pred_val.squeeze().numpy()
+                if cfg['na'] != na_last:
+                    print("Prediciting file: ", cfg['na'])
+                    save_data_to_txt(pred_val_file, na_last, Ridx)
+                    pred_val_file = []
+                    na_last = cfg['na']
+                pred_val_file.append(pred_val)
+            save_data_to_txt(pred_val_file, cfg['na'], Ridx)
+
 
 
 class LSTM_trainer():
