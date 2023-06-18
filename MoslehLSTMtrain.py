@@ -45,16 +45,15 @@ def train_CNN():
     # print("compressed codeword bits: {}".format(bits))
     # train_now = False
     train_now = True
-    agent3 = CNN_trainer(epochs=40,
+    agent3 = CNN_trainer(epochs=318,
                          train_now=train_now,
                          no_sample=320,
                          BPMresol=0.1,
                          breathEnd=1,
                          batch_size=32, # 320长度的数据共有416种情况
-                         learning_rate=1e-3,
-                         lr_decay_freq=5,
-                         lr_decay=0.1,
-                         best_loss=100,
+                         learning_rate=1e-4,
+                         lr_decay_freq=20,
+                         lr_decay=1,
                          num_workers=0,
                          print_freq=1,
                          train_test_ratio=0.8)
@@ -62,7 +61,7 @@ def train_CNN():
         agent3.model_train()
         agent3.model_save()
     else:
-        agent3.model_load("BDCNN_2023-06-17_15-54-46.pkl")
+        agent3.model_load("BDCNN_2023-06-17_21-00-42.pkl")
     agent3.model_predict(Ridx=1)
     # print("BDCNN")
     # print(agent3_loss)

@@ -55,9 +55,9 @@ class BDCNN(nn.Module):
             nn.MaxPool2d(kernel_size=(1,2))  # 经过池化 输出[64,14,22] 传入输出层
         )
         ## 输出层
-        self.linear1 = nn.Sequential(nn.Linear(in_features=64*14*22, out_features=4096), 
+        self.linear1 = nn.Sequential(nn.Linear(in_features=64*14*22, out_features=6144), 
                                         nn.ReLU())
-        self.linear2 = nn.Linear(in_features=4096, out_features=output_size)
+        self.linear2 = nn.Linear(in_features=6144, out_features=output_size)
         # softmax输出分类
         self.softmax = nn.Softmax(dim=1)
 

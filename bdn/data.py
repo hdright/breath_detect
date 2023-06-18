@@ -101,7 +101,7 @@ class BreathDataset(Dataset):
                 # 生成标签数据，是cfg['gt']的概率的类one-hot编码
                 if self.round == 0:
                     gt_pd = np.zeros(noBpmPoints)
-                    sigma2 = 1 / BPMresol
+                    sigma2 = 1 #/ BPMresol
                     x = np.arange(noBpmPoints)
                     for p in range(cfg['Np']):
                         # gt所有值的高斯分布叠加作为label
