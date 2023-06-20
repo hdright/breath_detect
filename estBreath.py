@@ -13,6 +13,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import scale
 
 
+
 def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
     '''
     估计每个4D CSI样本的呼吸率，需参设者自行设计
@@ -43,7 +44,7 @@ def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
     if Np > 1:
         BPMrange = [[8, 32], [5, 50]]
     BPMrangeI = 0
-    
+
     # 用取最大的三个峰值求加权平均
     freqs = []
     weights = []
@@ -90,7 +91,7 @@ def calcRER(CSIf: np.ndarray, fHigh: float) -> float:
     powerSum = np.sum(CSIpower)
     assert powerSum > 0
     BPMrange = [5, 50]
-    breathPower = np.sum(CSIpower[int(BPMrange[0] / 60 / fHigh * len(CSIf)): int(BPMrange[1] / 60 / fHigh * len(CSIf))])
+    breathPower = np.sum(CSIpower[int(BPMrange[0] / 60 / fHigh * len(CSIf))                         : int(BPMrange[1] / 60 / fHigh * len(CSIf))])
     RER = breathPower / powerSum
     return RER
 
@@ -140,7 +141,8 @@ def estMultisense(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
     # # 用取最大的三个峰值求加权平均
     # Amp = [0] * Np
     # WeightedSum = [0] * Np
-    rica = RobustICA(n_components=Np, whiten='arbitrary-variance')  # 'arbitrary-variance'
+    rica = RobustICA(n_components=Np, whiten='arbitrary-variance', 
+                     verbose=False)  # 'arbitrary-variance'
 
     patterns_ = []
     topCSIidxs_ = np.zeros((Nsc, Np), dtype=int)
@@ -175,6 +177,43 @@ def estMultisense(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
                     pattern = pattern_
             patterns_.append(pattern)
 
+    # 如果len(patterns_) < Np，说明有些子载波没有分解出足够的独立成分，就放宽RER条件
+    if len(patterns_) < 1:
+        # 选取RER排名前40%的子载波
+        RER_sc_a = np.array(RER_sc_)
+        usefulSc = np.argsort(-RER_sc_a)[:int(Nsc * 0.4)]
+        patterns_ = []
+        topCSIidxs_ = np.zeros((Nsc, Np), dtype=int)
+        for sc in usefulSc:
+            # 选取RER最大的前Np个CSI
+            topCSIidx = np.argsort(-RER_[sc])[:Np]
+            topCSIidxs_[sc] = topCSIidx
+            topCSI = CSI[:, :, sc, :].reshape(Nrx * Ntx, Nt).transpose()[:, topCSIidx]
+            # 用独立成分分析提取 Np 个复数呼吸信号
+            # S, _ = rica.fit_transform(np.abs(topCSI))
+            # S = S.transpose()
+            Sreal, _ = rica.fit_transform(topCSI.real)
+            Simag, _ = rica.fit_transform(topCSI.imag)
+            # S = Sreal.transpose() + 1j * Simag.transpose()
+            Sreal, Simag = Sreal.transpose(), Simag.transpose()
+
+            if len(Sreal) < Np or len(Simag) < Np:
+                # 如果分解出的独立成分不足Np个，就跳过这个子载波
+                usefulSc = np.delete(usefulSc, np.where(usefulSc == sc))
+                continue
+
+            for i in range(Np):
+                realSmooth = savgol_filter(Sreal[i], 8, 7)  # 用Savitzky-Golay滤波器平滑曲线
+                imagSmooth = savgol_filter(Simag[i], 8, 7)
+                pattern = np.empty_like(realSmooth)
+                patternVar = 0
+                for theta in np.linspace(0, 2 * np.pi, 100):
+                    pattern_ = np.cos(theta) * realSmooth + np.sin(theta) * imagSmooth
+                    patternVar_ = np.var(pattern_)
+                    if patternVar_ > patternVar:
+                        patternVar = patternVar_
+                        pattern = pattern_
+                patterns_.append(pattern)
     # 用 K-Means 将呼吸模式聚类为 Np 类，对应 Np 个呼吸率
     kmeans = KMeans(n_clusters=Np).fit(patterns_)
     # 在每个类中，将所有呼吸模式按RER加权求和
@@ -200,3 +239,4 @@ def estMultisense(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
             break
     ret = np.sort(ret)
     return ret
+

@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import scale, StandardScaler
 from chusai import CsiFormatConvrt, FindFiles, CfgFormat
 import os
+from skimage import transform
 
 # %%
 PathSet = {0: "./TestData", 1: "./CompetitionData1", 2: "./CompetitionData2",
@@ -42,6 +43,8 @@ class BreathDataset(Dataset):
             names = [self.names[0]]
         elif no_sample == 320:
             names = self.names[1:]
+        elif no_sample == 90320: # 将90*600的fft矩阵扩展为320*600
+            names = self.names
         else:
             names = []
             raise ValueError('no_sample should be 90 or 320')
@@ -94,14 +97,27 @@ class BreathDataset(Dataset):
                         for k in range(Cfg['Nsc']):
                             CSIfft[i * Cfg['Ntx'] * Cfg['Nsc'] + j * Cfg['Nsc'] + k] = np.fft.fft(
                                 savgol_filter(np.abs(CSI_sam[i, j, k, :]), 8, 7), Ndft)[0:dftSize]
+                CSIfft = np.abs(CSIfft)
+                if no_sample == 90320 or no_sample == 90:
+                    if Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'] == 90:
+                        # 将90*600的fft矩阵扩展为320*600
+                        CSIfft_concat = np.zeros((320, noBpmPoints))
+                        # 每30行拉伸为40行
+                        for i in range(3):
+                            CSIfft_concat[i*40:(i+1)*40, :] = transform.resize(CSIfft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
+                        # 再重复前120行至320行
+                        CSIfft_concat[120:240, :] = CSIfft_concat[:120, :]
+                        CSIfft_concat[240:, :] = CSIfft_concat[:80, :]
+                        CSIfft = CSIfft_concat
+                        
                 # CSIfft按行标准化
-                CSIfft = scaler.fit_transform(np.abs(CSIfft).T).T
+                CSIfft = scaler.fit_transform(CSIfft.T).T
                 self.CSI_fft.append(CSIfft.astype(np.float32))
 
                 # 生成标签数据，是cfg['gt']的概率的类one-hot编码
                 if self.round == 0:
                     gt_pd = np.zeros(noBpmPoints)
-                    sigma2 = 1 #/ BPMresol
+                    sigma2 = 1000 #/ BPMresol
                     x = np.arange(noBpmPoints)
                     for p in range(cfg['Np']):
                         # gt所有值的高斯分布叠加作为label

@@ -113,9 +113,17 @@ class CNN_trainer():
         # self.train_shuffle_dataset, self.test_shuffle_dataset = \
         #     load_data_from_txt('./train_data', shuffle=True)
         if train_now:
-            if os.path.exists('./chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1.pkl'):
+            # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1.pkl'
+            # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig0.1.pkl'
+            # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig10.pkl'
+            # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig100.pkl'
+            train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1000.pkl'
+            train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90.pkl'
+            train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320.pkl'
+            train_pkl = train002009
+            if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
-                with open('./chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1.pkl', 'rb') as f:
+                with open(train_pkl, 'rb') as f:
                     self.train_shuffle_loader = pickle.load(f)
             else:
                 self.train_shuffle_loader = load_data_from_txt(
@@ -126,7 +134,7 @@ class CNN_trainer():
                                                                 shuffle = True, # 设置是否打乱数据
                                                                 num_workers = 2, # 设置读取数据的线程数量
                                                         )
-                with open('./chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1.pkl', 'wb') as f:
+                with open(train_pkl, 'wb') as f:
                     pickle.dump(self.train_shuffle_loader, f)
 
 
@@ -150,19 +158,6 @@ class CNN_trainer():
             print(self.model, file=f)
         print('Model saved!')
         
-#         encoderPATH = os.path.join(model_path, encodername)
-#         decoderPATH = os.path.join(model_path, decodername)
-#         try:
-#             torch.save({'state_dict': self.model.encoder.state_dict(), }, encoderPATH)
-#         except:
-#             torch.save({'state_dict': self.model.module.encoder.state_dict(), }, encoderPATH)
-
-#         try:
-#             torch.save({'state_dict': self.model.decoder.state_dict(), }, decoderPATH)
-#         except:
-#             torch.save({'state_dict': self.model.module.decoder.state_dict(), }, decoderPATH)
-# #         print('Model saved!')
-#         self.best_loss = self.average_loss
 
     def model_load(self, name, path = "./model_save"):
         print('Loading model...')
@@ -170,11 +165,6 @@ class CNN_trainer():
         model_dict = torch.load(modelPATH)
         self.model.load_state_dict(model_dict['state_dict'], strict=False)  # type: ignore
 
-        # encoder_dict = torch.load(encoderPATH)
-        # self.model.encoder.load_state_dict(encoder_dict['state_dict'], strict=False)  # type: ignore
-
-        # decoder_dict = torch.load(decoderPATH)
-        # self.model.decoder.load_state_dict(decoder_dict['state_dict'], strict=False)  # type: ignore
 
     def model_train(self):
         writer = SummaryWriter(log_dir='./model_save/'+self.model_time+'/')
@@ -190,6 +180,7 @@ class CNN_trainer():
 
             # training...
             se_total = torch.zeros(1)
+            se_001 = torch.zeros(1)
             Np_total = torch.zeros(1)
             loss_total = torch.zeros(1)
             len_train_loader = len(self.train_shuffle_loader)
@@ -231,7 +222,7 @@ class CNN_trainer():
                                 epoch, i, len_train_loader, loss=loss.item(), rmse=rmse.item()))
                         else:
                             se = torch.zeros(1)
-                            for iBatch in range(self.batch_size):
+                            for iBatch in range(len(output)):
                                 # print("output.shape:", output.shape)
                                 # print("cfg['Np'].shape:", cfg['Np'].shape)
                                 # print("cfg['Np']:", cfg['Np'])
@@ -249,18 +240,24 @@ class CNN_trainer():
                                     # print("pred_val.shape:", pred_val.shape)
                                     print("pred_val, cfg['gt'][iBatch]:", pred_val, cfg['gt'][iBatch])
                                 se += torch.sum((pred_val[:cfg['Np'][iBatch]] - cfg['gt'][iBatch][:cfg['Np'][iBatch]]) ** 2)
+                                if cfg['na'][iBatch] == '001':
+                                    se_001 += torch.sum((pred_val[:cfg['Np'][iBatch]] - cfg['gt'][iBatch][:cfg['Np'][iBatch]]) ** 2)
                             se_total += se
                             Np_total += torch.sum(cfg['Np'])
                             loss_total += loss.item()
                             rmse = torch.sqrt(se / torch.sum(cfg['Np']))
                             print('Epoch: [{0}][{1}/{2}]\t'
-                                'Loss {loss:.4f}\t, RMSE {rmse:.4f}'.format(
-                                epoch, i, len(self.train_shuffle_loader), loss=loss.item(), rmse=rmse.item()))
+                                'Loss {loss:.4f}\t'
+                                'RMSE {rmse:.4f}\t'.format(
+                                epoch, i, len_train_loader, loss=loss.item(), rmse=rmse.item()))
             rmse_total = torch.sqrt(se_total / Np_total)
+            rmse_001 = torch.sqrt(se_001 / 74)
             loss_total = loss_total / len_train_loader
-            print("loss_total, rmse_total:", loss_total, rmse_total)
+            # print("loss_total, rmse_total:", loss_total, rmse_total)
+            print("loss_total, rmse_total, rmse_001:", loss_total, rmse_total, rmse_001)
             writer.add_scalar('train_loss', loss_total, epoch)
             writer.add_scalar('train_rmse', rmse_total, epoch)
+            writer.add_scalar('train_rmse_001', rmse_001, epoch)
             self.best_loss = loss_total
             self.best_rmse = rmse_total
             self.model.eval()
