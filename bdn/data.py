@@ -7,6 +7,7 @@ from sklearn.preprocessing import scale, StandardScaler
 from chusai import CsiFormatConvrt, FindFiles, CfgFormat
 import os
 from skimage import transform
+from estBreath import hampel, hampelpd
 
 # %%
 PathSet = {0: "./TestData", 1: "./CompetitionData1", 2: "./CompetitionData2",
@@ -40,15 +41,22 @@ class BreathDataset(Dataset):
         self.gt_pd = []
         self.Cfg = []
         if no_sample == 90:
-            names = [self.names[0]]
+            if Round == 2:
+                names = [self.names[0], self.names[3]]
+            else:
+                names = [self.names[0]]
         elif no_sample == 320:
-            names = self.names[1:]
+            if Round == 2:
+                names = self.names[1:3]
+            else:
+                names = self.names[1:]
         elif no_sample == 90320: # 将90*600的fft矩阵扩展为320*600
             names = self.names
         else:
             names = []
             raise ValueError('no_sample should be 90 or 320')
-        scaler = StandardScaler()
+        ampScalar = StandardScaler()
+        ampFftScaler = StandardScaler()
         for na in names:  # 舍去第一个文件
             print("Loading %s InputData %s / %d" % (Prefix, na, len(self.names)))
             # print("%s / %d" % (na, len(self.names)))
@@ -92,32 +100,40 @@ class BreathDataset(Dataset):
                 noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
 
                 CSIfft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
+                j = 0
                 for i in range(Cfg['Nrx']):
-                    for j in range(Cfg['Ntx']):
-                        for k in range(Cfg['Nsc']):
-                            CSIfft[i * Cfg['Ntx'] * Cfg['Nsc'] + j * Cfg['Nsc'] + k] = np.fft.fft(
-                                savgol_filter(np.abs(CSI_sam[i, j, k, :]), 8, 7), Ndft)[0:dftSize]
+                    for k in range(Cfg['Nsc']):
+                        filtered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), 8, 7)
+                        # filtered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), 8, 7)
+                        if (j, k) == (0, 0):
+                            ampScalar.fit(filtered.reshape(-1, 1))
+                        scaled = ampScalar.transform(filtered.reshape(-1, 1)).reshape(-1)
+                        CSIfft[i * Cfg['Nsc'] + k] = np.fft.fft(scaled, Ndft)[0:dftSize]
                 CSIfft = np.abs(CSIfft)
-                if no_sample == 90320 or no_sample == 90:
+                # if no_sample == 90320 or no_sample == 90:
+                if no_sample == 90320:
                     if Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'] == 90:
                         # 将90*600的fft矩阵扩展为320*600
-                        CSIfft_concat = np.zeros((320, noBpmPoints))
+                        CSIfft_stretch_sc = np.zeros((120, noBpmPoints))
+                        CSIfft_stretch_rx = np.zeros((320, noBpmPoints))
                         # 每30行拉伸为40行
                         for i in range(3):
-                            CSIfft_concat[i*40:(i+1)*40, :] = transform.resize(CSIfft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
-                        # 再重复前120行至320行
-                        CSIfft_concat[120:240, :] = CSIfft_concat[:120, :]
-                        CSIfft_concat[240:, :] = CSIfft_concat[:80, :]
-                        CSIfft = CSIfft_concat
+                            CSIfft_stretch_sc[i*40:(i+1)*40, :] = transform.resize(CSIfft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
+                        # 120行中，每隔40行取一行，一共能取3行（如0、40、80，等差数列），拉伸为8行，形成320行
+                        for i in range(40):
+                            sc_idx = np.arange(i, 120, 40)
+                            rx_idx = np.arange(i, 320, 40)
+                            CSIfft_stretch_rx[rx_idx, :] = transform.resize(CSIfft_stretch_sc[sc_idx, :], (8, noBpmPoints), order=3)
+                        CSIfft = CSIfft_stretch_rx
                         
                 # CSIfft按行标准化
-                CSIfft = scaler.fit_transform(CSIfft.T).T
+                CSIfft = ampFftScaler.fit_transform(CSIfft.T).T
                 self.CSI_fft.append(CSIfft.astype(np.float32))
 
                 # 生成标签数据，是cfg['gt']的概率的类one-hot编码
                 if self.round == 0:
                     gt_pd = np.zeros(noBpmPoints)
-                    sigma2 = 1000 #/ BPMresol
+                    sigma2 = 1 / BPMresol ** 2
                     x = np.arange(noBpmPoints)
                     for p in range(cfg['Np']):
                         # gt所有值的高斯分布叠加作为label

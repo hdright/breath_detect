@@ -89,7 +89,7 @@ class CNN_trainer():
         bpmRange = np.arange(0, 60, BPMresol)
         noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
 
-        self.model = BDCNN(output_size=noBpmPoints)
+        self.model = BDCNN(input_sample=no_sample, output_size=noBpmPoints)
         print("noBpmPoints: ", noBpmPoints)
         self.x_label = []
         self.y_label = []
@@ -117,10 +117,16 @@ class CNN_trainer():
             # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig0.1.pkl'
             # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig10.pkl'
             # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig100.pkl'
-            train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1000.pkl'
-            train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90.pkl'
-            train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320.pkl'
-            train_pkl = train002009
+            train002009 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gausssig100.pkl'
+            # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1000.pkl'
+            # train002009 = './chusai_data/TestData/train_shuffle_loader_hampel_stdfft_gaussianlabelsig100.pkl'
+            # train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90.pkl'
+            # train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90_more_reasonable_fftstretch.pkl'
+            # train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90_nostretch.pkl'
+            train001 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_90_nostretch.pkl'
+            # train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320.pkl'
+            train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320_more_reasonable_fftstretch.pkl'
+            train_pkl = train001
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:

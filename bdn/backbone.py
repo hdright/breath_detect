@@ -11,17 +11,27 @@ from collections import OrderedDict
 import numpy as np
 
 class BDCNN(nn.Module):
-    def __init__(self, output_size=600):
+    def __init__(self, input_sample=320, output_size=600):
         super(BDCNN, self).__init__()   # 继承__init__功能
         ## 第一层卷积
+        if input_sample == 320 or input_sample == 90320:
+            padding00 = 3
+            kernel00 = 16
+            stride00 = 10
+            pool00 = 2
+        else:
+            padding00 = 6
+            kernel00 = 12
+            stride00 = 6
+            pool00 = 1
         self.conv1 = nn.Sequential(
             # 输入[1,320,600]
             nn.Conv2d(
                 in_channels=1,    # 输入图片的高度
                 out_channels=16,  # 输出图片的高度
-                kernel_size=(16,35),    # 16*35的卷积核，相当于过滤器
-                stride=(10,5),         # 卷积核在图上滑动，每隔个扫一次
-                padding=(3,0),        # 给图外边补上0
+                kernel_size=(kernel00,35),    # 16*35的卷积核，相当于过滤器
+                stride=(stride00,5),         # 卷积核在图上滑动，每隔个扫一次
+                padding=(padding00,0),        # 给图外边补上0
             ),
             nn.Conv2d(
                 in_channels=16,    # 输入图片的高度
@@ -32,7 +42,7 @@ class BDCNN(nn.Module):
             ),
             # 经过卷积层 输出[32,32,104] 传入池化层
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2)   # 经过池化 输出[32,16,52] 传入下一个卷积
+            nn.MaxPool2d(kernel_size=(pool00, 2))   # 经过池化 输出[32,16,52] 传入下一个卷积
         )
         ## 第二层卷积
         self.conv2 = nn.Sequential(

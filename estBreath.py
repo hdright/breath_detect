@@ -11,7 +11,78 @@ from robustica import RobustICA
 from scipy.signal import find_peaks, savgol_filter
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import scale
+import pandas as pd
 
+def hampelpd(vals_orig, k=7, t0=3):
+    '''
+    vals: pandas series of values from which to remove outliers
+    k: size of window (including the sample; 7 is equal to 3 on either side of value)
+    '''
+    # 如果是numpy数组，转换为pandas series
+    if isinstance(vals_orig, np.ndarray):
+        vals = pd.Series(vals_orig)
+    else:
+        #Make copy so original not edited
+        vals = vals_orig.copy()
+    
+    #Hampel Filter
+    L = 1.4826
+    rolling_median = vals.rolling(window=k, center=True).median()
+    MAD = lambda x: np.median(np.abs(x - np.median(x)))
+    rolling_MAD = vals.rolling(window=k, center=True).apply(MAD)
+    threshold = t0 * L * rolling_MAD
+    difference = np.abs(vals - rolling_median)
+    
+    '''
+    Perhaps a condition should be added here in the case that the threshold value
+    is 0.0; maybe do not mark as outlier. MAD may be 0.0 without the original values
+    being equal. See differences between MAD vs SDV.
+    '''
+    
+    outlier_idx = difference > threshold
+    vals[outlier_idx] = rolling_median[outlier_idx] 
+    if isinstance(vals_orig, np.ndarray):
+        return(vals.values)
+    return(vals)
+
+def hampel(X, k):
+    """
+    Apply Hampel filter to a given array X with window size k.
+    The filter replaces outliers with the median value of the window.
+    
+    Parameters
+    ----------
+    X (numpy.ndarray): Input array to filter.
+    k (int): Window size for the filter.
+    
+    Returns
+    -------
+    numpy.ndarray: Filtered array.
+    """
+    length = X.shape[0] - 1
+    nsigma = 3
+    iLo = np.array([i - k for i in range(0, length + 1)])
+    iHi = np.array([i + k for i in range(0, length + 1)])
+    iLo[iLo < 0] = 0
+    iHi[iHi > length] = length
+    xmad = []
+    xmedian = []
+    for i in range(length + 1):
+        w = X[iLo[i]:iHi[i] + 1]
+        medj = np.median(w)
+        mad = np.median(np.abs(w - medj))
+        xmad.append(mad)
+        xmedian.append(medj)
+    xmad = np.array(xmad)
+    xmedian = np.array(xmedian)
+    scale = 1.4826  # 缩放
+    xsigma = scale * xmad
+    xi = ~(np.abs(X - xmedian) <= nsigma * xsigma)  # 找出离群点（即超过nsigma个标准差）
+ 
+    # 将离群点替换为中为数值
+    xf = X.copy()
+    xf[xi] = xmedian[xi]
+    return xf
 
 
 def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:

@@ -45,7 +45,7 @@ def train_CNN():
     # print("compressed codeword bits: {}".format(bits))
     # train_now = False
     train_now = True
-    no_sample = 320
+    no_sample = 90
     if no_sample == 90:
         batch_size = 34
     else:
@@ -66,8 +66,8 @@ def train_CNN():
         agent3.model_train()
         agent3.model_save()
     else:
-        agent3.model_load("2023-06-18_11-49-26-ep318/BDCNN_2023-06-18_11-49-26.pkl")
-    agent3.model_predict(Ridx=1)
+        agent3.model_load("2023-06-21_18-09-23-4x80scaleAmp/BDCNN_2023-06-21_18-09-23.pkl")
+    agent3.model_predict(Ridx=2)
     # print("BDCNN")
     # print(agent3_loss)
     # print("average time used is:", t3)

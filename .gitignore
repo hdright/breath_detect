@@ -4,6 +4,8 @@ __pycache__
 *.zip
 
 chusai_data/CompetitionData1
+chusai_data/CompetitionData2
+chusai_data/CompetitionData3
 chusai_data/TestData
 outputs
 model_save
