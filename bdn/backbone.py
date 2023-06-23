@@ -11,8 +11,130 @@ from collections import OrderedDict
 import numpy as np
 
 class BDCNN(nn.Module):
-    def __init__(self, input_sample=320, output_size=600):
+    def __init__(self, input_sample=640, output_size=600):
         super(BDCNN, self).__init__()   # 继承__init__功能
+        if input_sample == 640:
+            ## 第一层卷积
+            self.conv1 = nn.Sequential(
+                # 输入[1,320,600]
+                nn.Conv2d(
+                    in_channels=2,    # 输入图片的高度
+                    out_channels=64,  # 输出图片的高度
+                    kernel_size=(22,35),    # 16*35的卷积核，相当于过滤器
+                    stride=(10,5),         # 卷积核在图上滑动，每隔个扫一次
+                    padding=(6,0),        # 给图外边补上0
+                ),
+                nn.Conv2d(
+                    in_channels=64,    # 输入图片的高度
+                    out_channels=64,  # 输出图片的高度
+                    kernel_size=(7,15),    # 16*35的卷积核，相当于过滤器
+                    stride=1,         # 卷积核在图上滑动，每隔一个扫一次
+                    padding=(2,2),        # 给图外边补上0
+                ),
+                # 经过卷积层 输出[32,32,104] 传入池化层
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=(3, 3))   # 经过池化 输出[32,16,52] 传入下一个卷积
+            )
+            ## 第二层卷积
+            self.conv2 = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=64,    # 同上
+                    out_channels=128,
+                    kernel_size=(3,7),
+                    stride=1,
+                    padding=0
+                ),
+                nn.Conv2d(
+                    in_channels=128,    # 同上
+                    out_channels=256,
+                    kernel_size=(3,7),
+                    stride=1,
+                    padding=0
+                ),
+                # 经过卷积 输出[64, 14, 44] 传入池化层
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=(1,3))  # 经过池化 输出[64,14,22] 传入输出层
+            )
+            ## 输出层
+            self.linear1 = nn.Sequential(nn.Linear(in_features=256*6*7, out_features=8192), 
+                                            nn.ReLU(),
+                                            nn.Dropout(0.5)
+                                            )
+            self.linear2 = nn.Sequential(nn.Linear(in_features=8192, out_features=4096), 
+                                            nn.ReLU(),
+                                            nn.Dropout(0.5)
+                                            )
+            self.linear3 = nn.Linear(in_features=4096, out_features=output_size)
+            # softmax输出分类
+            self.softmax = nn.Softmax(dim=1)
+        else:
+            ## 第一层卷积
+            self.conv1 = nn.Sequential(
+                # 输入[1,320,600]
+                nn.Conv2d(
+                    in_channels=2,    # 输入图片的高度
+                    out_channels=64,  # 输出图片的高度
+                    kernel_size=(18,35),    # 16*35的卷积核，相当于过滤器
+                    stride=(4,5),         # 卷积核在图上滑动，每隔个扫一次
+                    padding=(6,0),        # 给图外边补上0
+                ),
+                nn.Conv2d(
+                    in_channels=64,    # 输入图片的高度
+                    out_channels=64,  # 输出图片的高度
+                    kernel_size=(7,15),    # 16*35的卷积核，相当于过滤器
+                    stride=1,         # 卷积核在图上滑动，每隔一个扫一次
+                    padding=(2,2),        # 给图外边补上0
+                ),
+                # 经过卷积层 输出[32,32,104] 传入池化层
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=(1, 3))   # 经过池化 输出[32,16,52] 传入下一个卷积
+            )
+            ## 第二层卷积
+            self.conv2 = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=64,    # 同上
+                    out_channels=128,
+                    kernel_size=(3,7),
+                    stride=1,
+                    padding=0
+                ),
+                nn.Conv2d(
+                    in_channels=128,    # 同上
+                    out_channels=256,
+                    kernel_size=(3,7),
+                    stride=1,
+                    padding=(0,1)
+                ),
+                # 经过卷积 输出[64, 14, 44] 传入池化层
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=(4,3))  # 经过池化 输出[64,14,22] 传入输出层
+            )
+            ## 输出层
+            self.linear1 = nn.Sequential(nn.Linear(in_features=256*4*8, out_features=8192), 
+                                            nn.ReLU(),
+                                            nn.Dropout(0.5)
+                                            )
+            self.linear2 = nn.Sequential(nn.Linear(in_features=8192, out_features=4096), 
+                                            nn.ReLU(),
+                                            nn.Dropout(0.5)
+                                            )
+            self.linear3 = nn.Linear(in_features=4096, out_features=output_size)
+            # softmax输出分类
+            self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)           # [batch, 64,14,22]
+        x = x.view(x.size(0), -1)   # 保留batch, 将后面的乘到一起 [batch, 64*14*22]
+        linear_o1 = self.linear1(x)     # 输出[50,10]
+        linear_o2 = self.linear2(linear_o1)     # 输出[50,10]
+        linear_o3 = self.linear3(linear_o2)     # 输出[50,10]
+        # output = self.softmax(linear_o2) # 输出[50,10]
+        return linear_o3
+
+class BDCNNold(nn.Module):
+    def __init__(self, input_sample=320, output_size=600):
+        super(BDCNNold, self).__init__()   # 继承__init__功能
         ## 第一层卷积
         if input_sample == 320 or input_sample == 90320:
             padding00 = 3

@@ -122,15 +122,19 @@ def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
     for rx in range(Nrx):
         for tx in range(Ntx):
             for sc in range(Nsc):
-                denoised = savgol_filter(np.abs(CSI[rx][tx][sc]), 8, 7)  # 用Savitzky-Golay滤波器去噪
+                csi_norm = np.angle(CSI[rx][tx][sc]) - np.angle(CSI[(rx + 1) % Nrx][tx][sc])
+                denoised = savgol_filter(csi_norm, 8, 7)  # 用Savitzky-Golay滤波器去噪
                 amp = scale(denoised)  # z-score 归一化
-                psd = Wdft @ amp  # 用 DFT 变换到频域
+                
+                psd = np.abs(Wdft @ amp)  # 用 DFT 变换到频域
                 # pha = scale(np.angle(denoised))
+                # n = len(psd)
+                # autor = np.correlate(psd, psd, mode="full")[n-1:]
                 for BPMrangeI in range(len(BPMrange)):
                     minBPM, maxBPM = BPMrange[BPMrangeI]
                     minIndex, maxIndex = int(minBPM / BPMresol), int(maxBPM / BPMresol)
                     filteredHs = np.zeros_like(Hs, dtype=np.float64)
-                    filteredHs[minIndex: maxIndex] = np.abs(psd[minIndex:maxIndex])
+                    filteredHs[minIndex: maxIndex] =psd[minIndex:maxIndex]
                     idx, _ = find_peaks(filteredHs, height=0.001, distance=3 / BPMresol)
                     if len(idx) < 1:
                         continue
@@ -141,13 +145,14 @@ def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
                             weights.append(filteredHs[idx[highestPeak[i]]])
                     break
     # 用带权重的KMeans 聚类
-    kmeans = KMeans(n_clusters=Np, tol=3.5).fit(np.array([freqs]).T, sample_weight=weights)
+    kmeans = KMeans(n_clusters=Np, tol=3.5, n_init="auto").fit(np.array([freqs]).T, sample_weight=weights)
     # 将频率按类内数量排序
     cnt = np.bincount(kmeans.labels_)
     freqs = kmeans.cluster_centers_[np.argsort(-cnt)]
 
     ret = np.sort(np.squeeze(freqs[:Np], axis=1))
     return ret
+
 
 
 def calcRER(CSIf: np.ndarray, fHigh: float) -> float:

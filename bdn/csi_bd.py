@@ -17,7 +17,7 @@ import pickle
 from scipy.signal import find_peaks
 
 # from bdn.loss import NMSE_cuda, NMSELoss, CosSimilarity, rho
-from bdn.backbone import RegLSTM, BDCNN
+from bdn.backbone import RegLSTM, BDCNN, BDCNNold
 from bdn.data_old import load_data
 from bdn.data import load_data_from_txt, save_data_to_txt
 import matplotlib.pyplot as plt
@@ -46,6 +46,10 @@ def channel_visualization(image):
     ax.xaxis.set_ticks_position('bottom')
     plt.show()
 
+def apply_dropout(m):
+    if type(m) == nn.Dropout:
+        m.train()
+
 SEED = 42
 print("seeding everything...")
 seed_everything(SEED)
@@ -55,7 +59,7 @@ class CNN_trainer():
 
     def __init__(self,
                  epochs,
-                #  net,
+                 net,
                  #  feedbackbits=128,
                  train_now=True,
                  no_sample=320, # 设置读取哪种txt文件，90样本或者320样本
@@ -69,7 +73,7 @@ class CNN_trainer():
                  num_workers=0,
                  print_freq=25,
                  train_test_ratio=0.8):
-
+        self.net = net
         self.epochs = epochs
         self.batch_size = batch_size
         self.learning_rate = learning_rate
@@ -89,7 +93,7 @@ class CNN_trainer():
         bpmRange = np.arange(0, 60, BPMresol)
         noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
 
-        self.model = BDCNN(input_sample=no_sample, output_size=noBpmPoints)
+        self.model = eval(net)(input_sample=no_sample, output_size=noBpmPoints)
         print("noBpmPoints: ", noBpmPoints)
         self.x_label = []
         self.y_label = []
@@ -117,16 +121,25 @@ class CNN_trainer():
             # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig0.1.pkl'
             # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig10.pkl'
             # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig100.pkl'
-            train002009 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gausssig100.pkl'
+            # train002009 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gausssig100.pkl'
+            # train002009 = './chusai_data/TestData/train_shuffle_loader_StdAmpFft_indepstdamp_gausssig100.pkl'
+            train002009 = './chusai_data/TestData/train_shuffle_loader_colStdAmpFft_stdAmp_gausssig100.pkl'
             # train002009 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1000.pkl'
             # train002009 = './chusai_data/TestData/train_shuffle_loader_hampel_stdfft_gaussianlabelsig100.pkl'
             # train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90.pkl'
             # train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90_more_reasonable_fftstretch.pkl'
             # train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90_nostretch.pkl'
             train001 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_90_nostretch.pkl'
+            # train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180_nostretch.pkl'
+            train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180ronly001_nostretch.pkl'
+            # 还未运行train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_indepStdPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320.pkl'
             train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320_more_reasonable_fftstretch.pkl'
-            train_pkl = train001
+            # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_gausssig100.pkl'
+            # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_deltaphase_gausssig100.pkl'
+            # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_diffphase_gausssig100.pkl'
+            train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig100.pkl'
+            train_pkl = train002009_640
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -193,7 +206,7 @@ class CNN_trainer():
             for i, (x_in, label, cfg) in enumerate(self.train_shuffle_loader):
                 self.optimizer.zero_grad()
                 x_in = x_in.cuda()  # input [batch=1, 320, 600]
-                x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
+                # x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600] # 取消这个操作，因为在load_data_from_txt中已经增加了一个维度
                 # print("x_in.shape:", x_in.shape)
                 output = self.model(x_in) #.squeeze()
                 # print("output.shape:", output.shape)
@@ -269,54 +282,7 @@ class CNN_trainer():
             self.model.eval()
 
         writer.close()
-            # evaluating...
-            # self.total_loss = 0
-            # self.total_rho = 0
-            # start = time.time()
-            # with torch.no_grad():
-
-            #     for i, (x_in, label) in enumerate(self.test_shuffle_loader):
-                    
-            #         x_in = x_in.cuda()
-            #         output = self.model(x_in).squeeze()
-            #         label = label.cuda()
-            #         print("output.shape:", output.shape)
-            #         # 查看output的值
-            #         print("output:", output)
-            #         print("label.shape:", label.shape)
-            #         print("label:", label)
-            #         self.total_loss += self.criterion_test(output, label).item()
-            #         # self.total_rho += self.criterion_rho(output,input).item()
-            #         #print(rho(output,input), type(rho(output,input)))
-            #         # self.total_rho += (rho(output,input))
-                    
-            #     end = time.time()
-            #     t = end - start
-            #     self.average_loss = self.total_loss / (i+1)
-            #     # print("len(self.test_dataset):", len(self.test_dataset))
-            #     # self.average_rho = self.total_rho / len(list(enumerate(self.test_loader)))
-            #     self.x_label.append(epoch)
-            #     self.y_label.append(self.average_loss)
-            #     self.t_label.append(t)
-            #     print('MSE %.4f time %.3f' % (self.average_loss, t))
-
-        # for i, input in enumerate(self.test_loader): # visualize one sample
-        #     if i == 3: # set shuffle = False to ensure the same sample each time
-        #         ones = torch.ones(32,32)
-        #         image1 = input[0].view(32,32)
-        #         image1 = ones - image1
-        #         image1 = image1.numpy()
-        #         channel_visualization(image1)
-        #         input = input.cuda()
-        #         output = self.model(input)
-        #         output = output.cpu()
-        #         image2 = output[0].view(32,32)
-        #         image2 = ones - image2
-        #         image2 = image2.detach().numpy()
-        #         channel_visualization(image2)
-
-        # return self.x_label, self.y_label, sum(self.t_label)/len(self.t_label) # , self.ys_label
-
+            
     def model_predict(self, Ridx):
         self.test_loader = load_data_from_txt(
                                             Ridx = Ridx, # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
@@ -327,6 +293,8 @@ class CNN_trainer():
                                             num_workers = 2, # 设置读取数据的线程数量
                                     )
         self.model.eval()
+        if self.net == "BDCNN":
+            self.model.apply(apply_dropout)
         with torch.no_grad():
             pred_val_file = [] # 每个文件的预测值列表
             na_last = ['']  # Fix for possibly unbound variable
@@ -336,21 +304,34 @@ class CNN_trainer():
             print("Prediciting file: ", na_last)
             for _, (x_in, cfg) in enumerate(self.test_loader):  # Fix for unused variable
                 x_in = x_in.cuda()
-                x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
-                output = self.model(x_in).squeeze()
-                # pred_val = (torch.argsort(-output)[:, :cfg['Np']] * self.BPMresol).cpu()
-                # pred_val = torch.sort(pred_val, dim=1)[0]
-                # pred_val = pred_val.squeeze().numpy()
-                # 用find_peaks求output[iBatch]的峰值索引
-                idx, _ = find_peaks(output.cpu().numpy(), distance=3/self.BPMresol)
-                # 对峰值索引对应的output[iBatch]值进行降序排序
-                highestPeak = torch.argsort(-output[idx]).cpu()
-                # 获得最高的Np个峰值索引，从而得到呼吸率估计值，转换成tensor
-                pred_val = torch.from_numpy(idx[highestPeak][:cfg['Np']] * self.BPMresol)
+                # x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
+                if self.net == "BDCNN":
+                    avg_time = 10
+                    pred_val_list = []
+                    for iAvg in range(avg_time):
+                        output = self.model(x_in).squeeze()
+                        idx, _ = find_peaks(output.cpu().numpy(), distance=3/self.BPMresol)
+                        highestPeak = torch.argsort(-output[idx]).cpu()
+                        pred_val = torch.from_numpy(idx[highestPeak][:cfg['Np']] * self.BPMresol)
+                        pred_val = torch.sort(pred_val)[0]
+                        pred_val_list.append(pred_val)
+                    pred_val = torch.mean(torch.stack(pred_val_list), dim=0)
+                else:
+                    output = self.model(x_in).squeeze()
+                    # pred_val = (torch.argsort(-output)[:, :cfg['Np']] * self.BPMresol).cpu()
+                    # pred_val = torch.sort(pred_val, dim=1)[0]
+                    # pred_val = pred_val.squeeze().numpy()
+                    # 用find_peaks求output[iBatch]的峰值索引
+                    idx, _ = find_peaks(output.cpu().numpy(), distance=3/self.BPMresol)
+                    # 对峰值索引对应的output[iBatch]值进行降序排序
+                    highestPeak = torch.argsort(-output[idx]).cpu()
+                    # 获得最高的Np个峰值索引，从而得到呼吸率估计值，转换成tensor
+                    pred_val = torch.from_numpy(idx[highestPeak][:cfg['Np']] * self.BPMresol)
+                    pred_val = torch.sort(pred_val)[0]
 
                 # pred_val = (torch.argsort(-output[iBatch])[:cfg['Np'][iBatch]] * self.BPMresol).cpu()
                 # 对呼吸率估计值进行升序排序
-                pred_val = torch.sort(pred_val)[0]
+                
                 if cfg['na'] != na_last:
                     print("Prediciting file: ", cfg['na'])
                     save_data_to_txt(pred_val_file, na_last, Ridx)

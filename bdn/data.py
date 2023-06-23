@@ -22,6 +22,10 @@ class BreathDataset(Dataset):
                  no_sample: int = 90):
         self.path = path
         self.round = Round
+        if no_sample in [640, 180]:
+            self.load_pha = True
+        else:
+            self.load_pha = False
         PathRaw = os.path.join(path, PathSet[Round])
         Prefix = PrefixSet[Round]
 
@@ -40,23 +44,26 @@ class BreathDataset(Dataset):
         self.CSI_fft = []
         self.gt_pd = []
         self.Cfg = []
-        if no_sample == 90:
+        if no_sample % 90 == 0:
             if Round == 2:
                 names = [self.names[0], self.names[3]]
             else:
+                # names = [self.names[0], self.names[9]]
                 names = [self.names[0]]
-        elif no_sample == 320:
+        elif no_sample % 320 == 0:
             if Round == 2:
                 names = self.names[1:3]
             else:
-                names = self.names[1:]
+                names = self.names[1:9]
         elif no_sample == 90320: # 将90*600的fft矩阵扩展为320*600
             names = self.names
         else:
             names = []
             raise ValueError('no_sample should be 90 or 320')
         ampScalar = StandardScaler()
+        phaScalar = StandardScaler()
         ampFftScaler = StandardScaler()
+        phaFftScaler = StandardScaler()
         for na in names:  # 舍去第一个文件
             print("Loading %s InputData %s / %d" % (Prefix, na, len(self.names)))
             # print("%s / %d" % (na, len(self.names)))
@@ -99,17 +106,32 @@ class BreathDataset(Dataset):
                 bpmRange = np.arange(0, 60, BPMresol)
                 noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
 
-                CSIfft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
+                csiAmpFft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
+                if self.load_pha:
+                    csiPhaFft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
                 j = 0
                 for i in range(Cfg['Nrx']):
                     for k in range(Cfg['Nsc']):
-                        filtered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), 8, 7)
-                        # filtered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), 8, 7)
+                        ampFiltered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), 8, 7)
+                        # ampFiltered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), 8, 7)
                         if (j, k) == (0, 0):
-                            ampScalar.fit(filtered.reshape(-1, 1))
-                        scaled = ampScalar.transform(filtered.reshape(-1, 1)).reshape(-1)
-                        CSIfft[i * Cfg['Nsc'] + k] = np.fft.fft(scaled, Ndft)[0:dftSize]
-                CSIfft = np.abs(CSIfft)
+                            ampScalar.fit(ampFiltered.reshape(-1, 1))
+                        csiAmpScaled = ampScalar.transform(ampFiltered.reshape(-1, 1)).reshape(-1)
+                        # csiAmpScaled = ampScalar.fit_transform(ampFiltered.reshape(-1, 1)).reshape(-1) # 不统一不对
+                        csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(csiAmpScaled, Ndft)[0:dftSize]
+                        if self.load_pha:
+                            phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]) -
+                                                            np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), 8, 7)
+                            # if i>0:
+                            #     phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]) -
+                            #                                 np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), 8, 7)
+                            # else:
+                            #     phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]), 8, 7)
+                            # 独立std
+                            phaScaled = scale(phaFiltered)
+                            csiPhaFft[i * Cfg['Nsc'] + k] = np.fft.fft(phaScaled, Ndft)[0:dftSize]
+                csiAmpFft = np.abs(csiAmpFft)
+                csiPhaFft = np.abs(csiPhaFft)
                 # if no_sample == 90320 or no_sample == 90:
                 if no_sample == 90320:
                     if Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'] == 90:
@@ -118,17 +140,28 @@ class BreathDataset(Dataset):
                         CSIfft_stretch_rx = np.zeros((320, noBpmPoints))
                         # 每30行拉伸为40行
                         for i in range(3):
-                            CSIfft_stretch_sc[i*40:(i+1)*40, :] = transform.resize(CSIfft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
+                            CSIfft_stretch_sc[i*40:(i+1)*40, :] = transform.resize(csiAmpFft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
                         # 120行中，每隔40行取一行，一共能取3行（如0、40、80，等差数列），拉伸为8行，形成320行
                         for i in range(40):
                             sc_idx = np.arange(i, 120, 40)
                             rx_idx = np.arange(i, 320, 40)
                             CSIfft_stretch_rx[rx_idx, :] = transform.resize(CSIfft_stretch_sc[sc_idx, :], (8, noBpmPoints), order=3)
-                        CSIfft = CSIfft_stretch_rx
+                        csiAmpFft = CSIfft_stretch_rx
                         
                 # CSIfft按行标准化
-                CSIfft = ampFftScaler.fit_transform(CSIfft.T).T
-                self.CSI_fft.append(CSIfft.astype(np.float32))
+                csiAmpFft = ampFftScaler.fit_transform(csiAmpFft.T).T
+                csiPhaFft = phaFftScaler.fit_transform(csiPhaFft.T).T
+                # # CSIfft按列标准化
+                # csiAmpFft = ampFftScaler.fit_transform(csiAmpFft)
+                # csiPhaFft = phaFftScaler.fit_transform(csiPhaFft)
+                # 在现有的0axis之前创建一个新axis，并组合csiAmpFft和csiPhaFft
+                csiAmpFft = np.expand_dims(csiAmpFft, axis=0)
+                csiPhaFft = np.expand_dims(csiPhaFft, axis=0)
+                csiFft = np.concatenate((csiAmpFft, csiPhaFft), axis=0)
+                if self.load_pha:
+                    self.CSI_fft.append(csiFft.astype(np.float32))
+                else:
+                    self.CSI_fft.append(csiAmpFft.astype(np.float32))
 
                 # 生成标签数据，是cfg['gt']的概率的类one-hot编码
                 if self.round == 0:
