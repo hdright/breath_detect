@@ -70,7 +70,7 @@ def train_CNN():
         agent3.model_train()
         agent3.model_save()
     else:
-        agent3.model_load("2023-06-24_09-52-56-sc14p45-3x30-noStdAmp-indepStdPha/BDCNN_2023-06-24_09-52-56.pkl")
+        agent3.model_load("breath_detect/model_save/2023-06-24_09-52-56-sc14p45-3x30-noStdAmp-indepStdPha/BDCNN_2023-06-24_09-52-56.pkl")
     agent3.model_predict(Ridx=2)
     # print("BDCNN")
     # print(agent3_loss)

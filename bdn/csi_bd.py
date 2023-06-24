@@ -14,7 +14,7 @@ import random
 import time
 import pickle
 # findpeak
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, savgol_filter
 
 # from bdn.loss import NMSE_cuda, NMSELoss, CosSimilarity, rho
 from bdn.backbone import RegLSTM, BDCNN, BDCNNold
@@ -179,7 +179,7 @@ class CNN_trainer():
         print('Model saved!')
         
 
-    def model_load(self, name, path = "./model_save"):
+    def model_load(self, name, path = "../"):
         print('Loading model...')
         modelPATH = os.path.join(path, name)
         model_dict = torch.load(modelPATH)
@@ -311,7 +311,21 @@ class CNN_trainer():
                     pred_val_list = []
                     for iAvg in range(avg_time):
                         output = self.model(x_in).squeeze()
-                        idx, _ = find_peaks(output.cpu().numpy(), distance=3/self.BPMresol)
+                        if self.no_sample % 90 == 0:
+                            output_sg = savgol_filter(output.cpu().numpy(), 5, 3)
+                            idx, _ = find_peaks(output_sg, distance=6/self.BPMresol)
+                            if not os.path.exists('find_peaks_Np3.png') and cfg['Np'] == 3:
+                                plt.figure()
+                                plt.plot(output_sg)
+                                plt.plot(idx, output_sg[idx], 'x')
+                                plt.savefig('find_peaks_Np3.png')
+                            if not os.path.exists('find_peaks_Np2.png') and cfg['Np'] == 2:
+                                plt.figure()
+                                plt.plot(output_sg)
+                                plt.plot(idx, output_sg[idx], 'x')
+                                plt.savefig('find_peaks_Np2.png')
+                        else:
+                            idx, _ = find_peaks(output.cpu().numpy(), distance=3/self.BPMresol)
                         highestPeak = torch.argsort(-output[idx]).cpu()
                         pred_val = torch.from_numpy(idx[highestPeak][:cfg['Np']] * self.BPMresol)
                         pred_val = torch.sort(pred_val)[0]
