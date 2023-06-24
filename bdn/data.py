@@ -114,11 +114,14 @@ class BreathDataset(Dataset):
                     for k in range(Cfg['Nsc']):
                         ampFiltered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), 8, 7)
                         # ampFiltered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), 8, 7)
-                        if (j, k) == (0, 0):
-                            ampScalar.fit(ampFiltered.reshape(-1, 1))
-                        csiAmpScaled = ampScalar.transform(ampFiltered.reshape(-1, 1)).reshape(-1)
-                        # csiAmpScaled = ampScalar.fit_transform(ampFiltered.reshape(-1, 1)).reshape(-1) # 不统一不对
-                        csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(csiAmpScaled, Ndft)[0:dftSize]
+                        if no_sample % 90 != 0: # 3x30场景不scale时域幅度
+                            if (j, k) == (0, 0):
+                                ampScalar.fit(ampFiltered.reshape(-1, 1))
+                            csiAmpScaled = ampScalar.transform(ampFiltered.reshape(-1, 1)).reshape(-1)
+                            # csiAmpScaled = ampScalar.fit_transform(ampFiltered.reshape(-1, 1)).reshape(-1) # 不统一不对
+                            csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(csiAmpScaled, Ndft)[0:dftSize]
+                        else:
+                            csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(ampFiltered, Ndft)[0:dftSize]
                         if self.load_pha:
                             phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]) -
                                                             np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), 8, 7)

@@ -131,15 +131,16 @@ class CNN_trainer():
             # train001 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90_nostretch.pkl'
             train001 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_90_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180_nostretch.pkl'
-            train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180ronly001_nostretch.pkl'
-            # 还未运行train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_indepStdPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
+            # train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180ronly001_nostretch.pkl'
+            # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_stdamp_indepStdDiffPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
+            train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'
             # train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320.pkl'
             train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320_more_reasonable_fftstretch.pkl'
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_gausssig100.pkl'
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_deltaphase_gausssig100.pkl'
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_diffphase_gausssig100.pkl'
             train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig100.pkl'
-            train_pkl = train002009_640
+            train_pkl = train001_180
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -294,7 +295,7 @@ class CNN_trainer():
                                     )
         self.model.eval()
         if self.net == "BDCNN":
-            self.model.apply(apply_dropout)
+            self.model.apply(apply_dropout) # eval时依然使用dropout
         with torch.no_grad():
             pred_val_file = [] # 每个文件的预测值列表
             na_last = ['']  # Fix for possibly unbound variable
