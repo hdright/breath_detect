@@ -45,13 +45,15 @@ class BreathDataset(Dataset):
         self.gt_pd = []
         self.Cfg = []
         if no_sample % 90 == 0:
-            if Round == 2:
+            if Round == 3:
+                names = [self.names[0], self.names[3], self.names[4]]
+            elif Round == 2:
                 names = [self.names[0], self.names[3]]
             else:
                 # names = [self.names[0], self.names[9]]
                 names = [self.names[0]]
         elif no_sample % 320 == 0:
-            if Round == 2:
+            if Round == 3 or Round == 2:
                 names = self.names[1:3]
             else:
                 names = self.names[1:9]
@@ -169,7 +171,7 @@ class BreathDataset(Dataset):
                 # 生成标签数据，是cfg['gt']的概率的类one-hot编码
                 if self.round == 0:
                     gt_pd = np.zeros(noBpmPoints)
-                    sigma2 = 1 / BPMresol ** 2
+                    sigma2 = (1 / BPMresol ** 2)
                     x = np.arange(noBpmPoints)
                     for p in range(cfg['Np']):
                         # gt所有值的高斯分布叠加作为label

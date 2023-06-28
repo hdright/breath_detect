@@ -45,7 +45,7 @@ def train_CNN():
     # print("compressed codeword bits: {}".format(bits))
     train_now = False
     # train_now = True
-    no_sample = 180
+    no_sample = 640 # 180对应3x30场景，640对应4x80场景
     if no_sample == 90:
         batch_size = 34
     elif no_sample == 180:
@@ -70,8 +70,11 @@ def train_CNN():
         agent3.model_train()
         agent3.model_save()
     else:
-        agent3.model_load("breath_detect/model_save/2023-06-24_09-52-56-sc14p45-3x30-noStdAmp-indepStdPha/BDCNN_2023-06-24_09-52-56.pkl")
-    agent3.model_predict(Ridx=2)
+        if no_sample == 180:
+            agent3.model_load("breath_detect/model_save/2023-06-24_09-52-56-sc14p45-3x30-noStdAmp-indepStdPha/BDCNN_2023-06-24_09-52-56.pkl")
+        elif no_sample == 640:
+            agent3.model_load("breath_detect/model_save/2023-06-23_14-20-22sc14p95-idepStdDiffPhase-4x80-ep160/BDCNN_2023-06-23_14-20-22.pkl")
+    agent3.model_predict(Ridx=3)
     # print("BDCNN")
     # print(agent3_loss)
     # print("average time used is:", t3)

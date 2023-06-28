@@ -17,7 +17,7 @@ import pickle
 from scipy.signal import find_peaks, savgol_filter
 
 # from bdn.loss import NMSE_cuda, NMSELoss, CosSimilarity, rho
-from bdn.backbone import RegLSTM, BDCNN, BDCNNold
+from bdn.backbone import RegLSTM, BDCNN, BDCNNold, BDCNN_ND
 from bdn.data_old import load_data
 from bdn.data import load_data_from_txt, save_data_to_txt
 import matplotlib.pyplot as plt
@@ -133,14 +133,15 @@ class CNN_trainer():
             # train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_stdamp_indepStdDiffPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
-            train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'
+            train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl' #best
             # train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320.pkl'
             train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320_more_reasonable_fftstretch.pkl'
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_gausssig100.pkl'
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_deltaphase_gausssig100.pkl'
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_diffphase_gausssig100.pkl'
-            train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig100.pkl'
-            train_pkl = train001_180
+            train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig100.pkl' # best
+            # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
+            train_pkl = train002009_640
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -247,7 +248,12 @@ class CNN_trainer():
                                 # print("cfg['Np'].shape:", cfg['Np'].shape)
                                 # print("cfg['Np']:", cfg['Np'])
                                 # 用find_peaks求output[iBatch]的峰值索引
-                                idx, _ = find_peaks(output[iBatch].cpu().numpy(), distance=3/self.BPMresol)
+                                if self.no_sample % 90 == 0:
+                                    output_sg = savgol_filter(output[iBatch].cpu().numpy(), 5, 3)
+                                    idx, _ = find_peaks(output_sg, distance=6/self.BPMresol) # 3x30场景，复赛间隔6
+                                else:
+                                    output_sg = output[iBatch].cpu().numpy()
+                                    idx, _ = find_peaks(output_sg, distance=3/self.BPMresol)
                                 # 对峰值索引对应的output[iBatch]值进行降序排序
                                 highestPeak = torch.argsort(-output[iBatch][idx]).cpu()
                                 # 获得最高的Np个峰值索引，从而得到呼吸率估计值，转换成tensor
@@ -307,13 +313,15 @@ class CNN_trainer():
                 x_in = x_in.cuda()
                 # x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
                 if self.net == "BDCNN":
-                    avg_time = 10
+                    avg_time = 1
                     pred_val_list = []
-                    for iAvg in range(avg_time):
+                    for _ in range(avg_time):
                         output = self.model(x_in).squeeze()
                         if self.no_sample % 90 == 0:
                             output_sg = savgol_filter(output.cpu().numpy(), 5, 3)
-                            idx, _ = find_peaks(output_sg, distance=6/self.BPMresol)
+                            # output_sg = savgol_filter(output.cpu().numpy(), 8, 7) #不如5,3
+                            # output_sg = output.cpu().numpy()
+                            idx, _ = find_peaks(output_sg, distance=6/self.BPMresol) # 3x30场景，复赛间隔6
                             if not os.path.exists('find_peaks_Np3.png') and cfg['Np'] == 3:
                                 plt.figure()
                                 plt.plot(output_sg)
@@ -325,13 +333,24 @@ class CNN_trainer():
                                 plt.plot(idx, output_sg[idx], 'x')
                                 plt.savefig('find_peaks_Np2.png')
                         else:
-                            idx, _ = find_peaks(output.cpu().numpy(), distance=3/self.BPMresol)
+                            output_sg = output.cpu().numpy()
+                            idx, _ = find_peaks(output_sg, distance=3/self.BPMresol)
                         highestPeak = torch.argsort(-output[idx]).cpu()
-                        pred_val = torch.from_numpy(idx[highestPeak][:cfg['Np']] * self.BPMresol)
-                        pred_val = torch.sort(pred_val)[0]
+                        # pred_val = torch.from_numpy(idx[highestPeak][:cfg['Np']] * self.BPMresol)
+                        # pred_val = torch.sort(pred_val)[0]
+                        pred_val = idx[highestPeak][:cfg['Np']] * self.BPMresol
+                        pred_val = np.sort(pred_val)
                         pred_val_list.append(pred_val)
-                    pred_val = torch.mean(torch.stack(pred_val_list), dim=0)
-                else:
+                    if avg_time > 1:
+                        # 控制z-score不会导致性能更好# Calculate the z-score of each array
+                        # z_scores = np.abs((pred_val_list - np.mean(pred_val_list, axis=0)) / np.std(pred_val_list))
+                        # if cfg['Np'] == 3:
+                        #     print("pred_val_list:", pred_val_list)
+                        #     print("z_scores:", z_scores)
+                        # # Remove arrays with a z-score greater than 3
+                        # pred_val_list = [pred_val_list[i] for i in range(len(pred_val_list)) if np.max(z_scores[i]) < 1]
+                        pred_val = np.mean(pred_val_list, axis=0)
+                else: # 无dropout，不取平均
                     output = self.model(x_in).squeeze()
                     # pred_val = (torch.argsort(-output)[:, :cfg['Np']] * self.BPMresol).cpu()
                     # pred_val = torch.sort(pred_val, dim=1)[0]
