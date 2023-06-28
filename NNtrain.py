@@ -45,7 +45,7 @@ def train_CNN():
     # print("compressed codeword bits: {}".format(bits))
     train_now = False
     # train_now = True
-    no_sample = 640 # 180对应3x30场景，640对应4x80场景
+    no_sample = 180 # 180对应3x30场景，640对应4x80场景
     if no_sample == 90:
         batch_size = 34
     elif no_sample == 180:
