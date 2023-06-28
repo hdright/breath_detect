@@ -313,7 +313,7 @@ class CNN_trainer():
                 x_in = x_in.cuda()
                 # x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
                 if self.net == "BDCNN":
-                    avg_time = 1
+                    avg_time = 100
                     pred_val_list = []
                     for _ in range(avg_time):
                         output = self.model(x_in).squeeze()
@@ -343,12 +343,12 @@ class CNN_trainer():
                         pred_val_list.append(pred_val)
                     if avg_time > 1:
                         # 控制z-score不会导致性能更好# Calculate the z-score of each array
-                        # z_scores = np.abs((pred_val_list - np.mean(pred_val_list, axis=0)) / np.std(pred_val_list))
-                        # if cfg['Np'] == 3:
-                        #     print("pred_val_list:", pred_val_list)
-                        #     print("z_scores:", z_scores)
-                        # # Remove arrays with a z-score greater than 3
-                        # pred_val_list = [pred_val_list[i] for i in range(len(pred_val_list)) if np.max(z_scores[i]) < 1]
+                        z_scores = np.abs((pred_val_list - np.mean(pred_val_list, axis=0)) / np.std(pred_val_list))
+                        if cfg['Np'] == 3:
+                            print("pred_val_list:", pred_val_list)
+                            print("z_scores:", z_scores)
+                        # Remove arrays with a z-score greater than 3
+                        pred_val_list = [pred_val_list[i] for i in range(len(pred_val_list)) if np.max(z_scores[i]) < 1]
                         pred_val = np.mean(pred_val_list, axis=0)
                 else: # 无dropout，不取平均
                     output = self.model(x_in).squeeze()
