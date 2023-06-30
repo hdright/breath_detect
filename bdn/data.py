@@ -8,26 +8,100 @@ from chusai import CsiFormatConvrt, FindFiles, CfgFormat
 import os
 from skimage import transform
 from estBreath import hampel, hampelpd
+from copy import deepcopy
+import random
 
 # %%
 PathSet = {0: "./TestData", 1: "./CompetitionData1", 2: "./CompetitionData2",
             3: "./CompetitionData3", 4: "./CompetitionData4"}
 PrefixSet = {0: "Test", 1: "Round1", 2: "Round2", 3: "Round3", 4: "Round4"}
+# savgol_window_length = 8
+savgol_window_length = 5
+# savgol_polyorder = 7
+savgol_polyorder = 3
+
+def fft_shift_extend(data, shift, BPMrange, BPMresol):
+    '''
+    将x的minIndex, maxIndex区间的值循环右移，右移长度为shift/BPMresol个单位
+
+    Parameters
+    ----------
+    data : np.ndarray
+        输入数据，shape为(2, x, 600)
+    shift : float
+        右移长度，单位为BPM
+    BPMrange : list
+        BPM范围，单位为BPM
+    BPMresol : float
+        BPM分辨率，单位为BPM
+
+    Returns
+    -------
+    x_delta : np.ndarray
+        右移后的数据，shape为(2, x, 600)
+    '''
+    minBPM, maxBPM = BPMrange[0], BPMrange[1]
+    minIndex, maxIndex = int(minBPM / BPMresol), int(maxBPM / BPMresol)
+    # 将x的minIndex, maxIndex区间的值循环右移，右移长度为shift/BPMresol个单位
+    shiftresol = int(shift / BPMresol)
+    x_delta = data.copy()
+    x_delta[:, :, minIndex:maxIndex] = np.roll(x_delta[:, :, minIndex:maxIndex], shiftresol, axis=2)
+    return x_delta
+
+def generate_gaussian_pulses(noBpmPoints, BPMresol, cfg, shift=0):
+    '''
+    生成高斯分布的ground truth
+
+    Parameters
+    ----------
+    noBpmPoints : int
+        BPM范围内的点数
+    BPMresol : float
+        BPM分辨率，单位为BPM
+    cfg : dict
+        从cfg文件中读取的配置信息
+    shift : float, optional
+        右移长度，单位为BPM, by default 0
+
+    Returns
+    -------
+    gt_pd : np.ndarray
+        高斯分布的ground truth，shape为(noBpmPoints,)
+    '''
+    gt_pd = np.zeros(noBpmPoints)
+    sigma2 = (1 / BPMresol ** 2)
+    x = np.arange(noBpmPoints)
+    for p in range(cfg['Np']):
+        # gt所有值的高斯分布叠加作为label
+        mu = (cfg['gt'][p]+shift) / BPMresol
+        gt_pd += np.exp(-(x - mu) ** 2 / (2 * sigma2)) / np.sqrt(2 * np.pi * sigma2) / cfg['Np']
+    return gt_pd
 
 class BreathDataset(Dataset):
     def __init__(self, Round: int, 
                  path: str = "./chusai_data/", 
                  BPMresol: float = 1, 
                  breathEnd: int = 1, 
-                 no_sample: int = 90):
+                 no_sample: int = 90,
+                #  extend_data: bool = True,
+                 Np2extend: list = []):
         self.path = path
         self.round = Round
-        if no_sample in [640, 180]:
+        if no_sample in [640, 180, 180640]:
             self.load_pha = True
         else:
             self.load_pha = False
         PathRaw = os.path.join(path, PathSet[Round])
         Prefix = PrefixSet[Round]
+
+        self.Np2extend = Np2extend
+        self.noSample = 0
+        if Round == 0 and len(self.Np2extend): # 训练时通过循环移位扩展数据
+            # self.extend_data = True
+            print('Extending data of Np =', self.Np2extend)
+        # else:
+        #     self.extend_data = False
+        self.BPMrange = [5, 50]  # 5-50BPM
 
         # self.names = FindFiles(PathRaw)  # 查找文件夹中包含的所有比赛/测试数据文件
         dirs = os.listdir(PathRaw)
@@ -57,8 +131,11 @@ class BreathDataset(Dataset):
                 names = self.names[1:3]
             else:
                 names = self.names[1:9]
-        elif no_sample == 90320: # 将90*600的fft矩阵扩展为320*600
-            names = self.names
+        elif no_sample in [90320,180640]: # 将90*600的fft矩阵扩展为320*600
+            if Round == 3 or Round == 2:
+                names = self.names
+            else:
+                names = self.names[0:9]
         else:
             names = []
             raise ValueError('no_sample should be 90 or 320')
@@ -92,6 +169,7 @@ class BreathDataset(Dataset):
                         gt = [np.fromstring(arr.strip(), dtype=float, sep = ' ') for arr in f.readlines()]
                     cfg['gt'] = np.pad(gt[ii], (0, 3 - len(gt[ii])), 'constant') # 补齐3个值, 防止dataloader因长度不一致报错
                 self.Cfg.append(cfg)
+                self.noSample += 1 # 每添加一个cfg，noSample加1
                 # self.CSI_s.append(CsiFormatConvrt(CSI[Nt[ii]:Nt[ii+1], :], Cfg['Nrx'],
                 #                                   Cfg['Ntx'], Cfg['Nsc'], Cfg['Nt'][ii]))
                 CSI_sam = CsiFormatConvrt(CSI[Nt[ii]:Nt[ii+1], :], Cfg['Nrx'],
@@ -114,8 +192,8 @@ class BreathDataset(Dataset):
                 j = 0
                 for i in range(Cfg['Nrx']):
                     for k in range(Cfg['Nsc']):
-                        ampFiltered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), 8, 7)
-                        # ampFiltered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), 8, 7)
+                        ampFiltered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), savgol_window_length, savgol_polyorder)
+                        # ampFiltered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), savgol_window_length, savgol_polyorder)
                         if no_sample % 90 != 0: # 3x30场景不scale时域幅度
                             if (j, k) == (0, 0):
                                 ampScalar.fit(ampFiltered.reshape(-1, 1))
@@ -126,19 +204,38 @@ class BreathDataset(Dataset):
                             csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(ampFiltered, Ndft)[0:dftSize]
                         if self.load_pha:
                             phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]) -
-                                                            np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), 8, 7)
+                                                            np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), 
+                                                            savgol_window_length, savgol_polyorder)
                             # if i>0:
                             #     phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]) -
-                            #                                 np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), 8, 7)
+                            #                                 np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), savgol_window_length, savgol_polyorder)
                             # else:
-                            #     phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]), 8, 7)
+                            #     phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]), savgol_window_length, savgol_polyorder)
                             # 独立std
                             phaScaled = scale(phaFiltered)
                             csiPhaFft[i * Cfg['Nsc'] + k] = np.fft.fft(phaScaled, Ndft)[0:dftSize]
                 csiAmpFft = np.abs(csiAmpFft)
                 csiPhaFft = np.abs(csiPhaFft)
                 # if no_sample == 90320 or no_sample == 90:
-                if no_sample == 90320:
+                if no_sample == 180640:
+                    if Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'] == 90:
+                        # 将90*600的csiAmpFft和csiPhaFft矩阵扩展为320*600
+                        CSIamp_stretch_sc = np.zeros((120, noBpmPoints))
+                        CSIamp_stretch_rx = np.zeros((320, noBpmPoints))
+                        CSIpha_stretch_sc = np.zeros((120, noBpmPoints))
+                        CSIpha_stretch_rx = np.zeros((320, noBpmPoints))
+                        # 每30行拉伸为40行
+                        for i in range(3):
+                            CSIamp_stretch_sc[i*40:(i+1)*40, :] = transform.resize(csiAmpFft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
+                            CSIpha_stretch_sc[i*40:(i+1)*40, :] = transform.resize(csiPhaFft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
+                        # 120行中，每隔40行取一行，一共能取3行（如0、40、80，等差数列），拉伸为8行，形成320行
+                        for i in range(40):
+                            sc_idx = np.arange(i, 120, 40)
+                            CSIamp_stretch_rx[i*8:(i+1)*8, :] = transform.resize(CSIamp_stretch_sc[sc_idx, :], (8, noBpmPoints), order=3)
+                            CSIpha_stretch_rx[i*8:(i+1)*8, :] = transform.resize(CSIpha_stretch_sc[sc_idx, :], (8, noBpmPoints), order=3)
+                        csiAmpFft = CSIamp_stretch_rx
+                        csiPhaFft = CSIpha_stretch_rx
+                elif no_sample == 90320:
                     if Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'] == 90:
                         # 将90*600的fft矩阵扩展为320*600
                         CSIfft_stretch_sc = np.zeros((120, noBpmPoints))
@@ -170,17 +267,57 @@ class BreathDataset(Dataset):
 
                 # 生成标签数据，是cfg['gt']的概率的类one-hot编码
                 if self.round == 0:
-                    gt_pd = np.zeros(noBpmPoints)
-                    sigma2 = (1 / BPMresol ** 2)
-                    x = np.arange(noBpmPoints)
-                    for p in range(cfg['Np']):
-                        # gt所有值的高斯分布叠加作为label
-                        mu = cfg['gt'][p] / BPMresol
-                        gt_pd += np.exp(-(x - mu) ** 2 / (2 * sigma2)) / np.sqrt(2 * np.pi * sigma2) / cfg['Np']
-
+                    gt_pd = generate_gaussian_pulses(noBpmPoints, BPMresol, cfg)
                     self.gt_pd.append(gt_pd)
 
+                    if cfg['Np'] in self.Np2extend:
+                        if cfg['Np'] in [2, 3]:
+                            # 2,3之间的随机小数保留一位有效数字
+                            shift_interval = 2
+                            # 左移次数，左移最低到8bpm
+                            leftShiftTimes = int(np.floor((min(cfg['gt']) - 8) / shift_interval))
+                            # 右移次数，右移最多floor(10/shift_interval)次，最高到45bpm
+                            rightShiftTimes = int(min(np.floor(10 / shift_interval), 
+                                                np.floor((45 - max(cfg['gt'])) / shift_interval)))
+                        else:
+                            # 4,6之间的随机小数保留一位有效数字
+                            shift_interval = round(random.uniform(4, 6), 1)
+                            # 左移次数，左移最低到8bpm，最多一次
+                            leftShiftTimes = int(min(np.floor((min(cfg['gt']) - 8) / shift_interval), 1))
+                            # 右移次数，右移最多floor(10/shift_interval)次，最高到45bpm
+                            rightShiftTimes = int(min(np.floor(10 / shift_interval), 
+                                                np.floor((45 - max(cfg['gt'])) / shift_interval)))
+                        # 左移fft
+                        for i in range(leftShiftTimes):
+                            shift = shift_interval * (i + 1)
+                            # 生成扩展的标签数据
+                            cfgcopy = deepcopy(cfg)
+                            cfgcopy['gt'] = cfgcopy['gt'] - shift
+                            self.noSample += 1 # 每添加一个cfg，noSample加1
+                            self.Cfg.append(cfgcopy)
+                            gt_pd = generate_gaussian_pulses(noBpmPoints, BPMresol, cfgcopy)
+                            self.gt_pd.append(gt_pd)
+                            # 生成扩展的csi数据
+                            csiFftEx = fft_shift_extend(csiFft.astype(np.float32), -shift, 
+                                                        self.BPMrange, BPMresol)
+                            self.CSI_fft.append(csiFftEx)
+                        # 右移fft
+                        for i in range(rightShiftTimes):
+                            shift = shift_interval * (i + 1)
+                            # 生成扩展的标签数据
+                            cfgcopy = deepcopy(cfg)
+                            cfgcopy['gt'] = cfgcopy['gt'] + shift
+                            self.noSample += 1 # 每添加一个cfg，noSample加1
+                            self.Cfg.append(cfgcopy)
+                            gt_pd = generate_gaussian_pulses(noBpmPoints, BPMresol, cfgcopy)
+                            self.gt_pd.append(gt_pd)
+                            # 生成扩展的csi数据
+                            csiFftEx = fft_shift_extend(csiFft.astype(np.float32), shift, 
+                                                        self.BPMrange, BPMresol)
+                            self.CSI_fft.append(csiFftEx)
+
             del CSI
+        print('数据加载完成！总共加载了{}个样本'.format(self.noSample))
             
 
     def __len__(self) -> int:
@@ -197,6 +334,7 @@ class BreathDataset(Dataset):
 def load_data_from_txt(
         Ridx = 0, # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
         no_sample = 90, # 设置样本数
+        Np2extend = [], # 设置需要扩展的Np
         BPMresolution = 1.0, # 设置BPM分辨率
         batch_size = 1, # 设置batch大小
         shuffle = True, # 设置是否打乱数据
@@ -218,7 +356,7 @@ def load_data_from_txt(
     num_workers : int, optional
         设置读取数据的线程数量, by default 0
     """
-    train_set = BreathDataset(Ridx, BPMresol=BPMresolution, no_sample=no_sample)
+    train_set = BreathDataset(Ridx, BPMresol=BPMresolution, no_sample=no_sample, Np2extend=Np2extend)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
     return train_loader
 

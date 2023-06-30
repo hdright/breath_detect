@@ -13,7 +13,7 @@ import numpy as np
 class BDCNN(nn.Module):
     def __init__(self, input_sample=640, output_size=600):
         super(BDCNN, self).__init__()   # 继承__init__功能
-        if input_sample == 640:
+        if input_sample in [640,180640]:
             ## 第一层卷积
             self.conv1 = nn.Sequential(
                 # 输入[2,320,600]
@@ -31,7 +31,8 @@ class BDCNN(nn.Module):
                     stride=1,         # 卷积核在图上滑动，每隔一个扫一次
                     padding=(2,2),        # 给图外边补上0
                 ),
-                # 经过卷积层 输出[64,30,104] 传入池化层
+                # 经过卷积层 输出[64,30,104] 传入BN、池化层
+                nn.BatchNorm2d(64),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=(3, 3))   # 经过池化 输出[64,10,34] 传入下一个卷积
             )
@@ -52,7 +53,8 @@ class BDCNN(nn.Module):
                     # padding=(0,1)
                     padding=0
                 ),
-                # 经过卷积 输出[256, 6, 24] 传入池化层
+                # 经过卷积 输出[256, 6, 24] 传入BN、池化层
+                nn.BatchNorm2d(256),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=(1,3))  # 经过池化 输出[256,6,8] 传入输出层
             )
@@ -87,7 +89,8 @@ class BDCNN(nn.Module):
                     stride=1,         # 卷积核在图上滑动，每隔一个扫一次
                     padding=(2,2),        # 给图外边补上0
                 ),
-                # 经过卷积层 输出[32,32,104] 传入池化层
+                # 经过卷积层 输出[32,32,104] 传入BN、池化层
+                nn.BatchNorm2d(64),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=(1, 3))   # 经过池化 输出[32,16,52] 传入下一个卷积
             )
@@ -107,7 +110,8 @@ class BDCNN(nn.Module):
                     stride=1,
                     padding=(0,1)
                 ),
-                # 经过卷积 输出[64, 14, 44] 传入池化层
+                # 经过卷积 输出[64, 14, 44] 传入BN、池化层
+                nn.BatchNorm2d(256),
                 nn.ReLU(),
                 nn.MaxPool2d(kernel_size=(4,3))  # 经过池化 输出[64,14,22] 传入输出层
             )
