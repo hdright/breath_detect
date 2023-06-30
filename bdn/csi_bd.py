@@ -17,7 +17,7 @@ import pickle
 from scipy.signal import find_peaks, savgol_filter
 
 # from bdn.loss import NMSE_cuda, NMSELoss, CosSimilarity, rho
-from bdn.backbone import RegLSTM, BDCNN, BDCNNold, BDCNN_ND
+from bdn.backbone import RegLSTM, BDCNN, BDCNNold, BDCNN_ND, BDInception3
 from bdn.data_old import load_data
 from bdn.data import load_data_from_txt, save_data_to_txt
 import matplotlib.pyplot as plt
@@ -52,6 +52,14 @@ def apply_dropout(m):
     if type(m) == nn.Dropout:
         m.train()
 
+def create_dir(directory): # 创建（尚未存在的）空目录函数
+    try:
+        os.mkdir(directory)
+    except FileNotFoundError:
+        os.makedirs(directory)
+    except FileExistsError:
+        pass 
+
 
 SEED = 42
 print("seeding everything...")
@@ -67,6 +75,8 @@ class CNN_trainer():
                  #  feedbackbits=128,
                  train_now=True,
                  no_sample=320,  # 设置读取哪种txt文件，90样本或者320样本
+                 ampRatio=False, # 是否使用幅度比值
+                 pre_sg = [8, 7], # 数据预处理savgol滤波器参数
                  Np2extend=[2, 3], # 训练时扩展几个人的场景的数据集
                  BPMresol=1.0,
                  breathEnd=1,
@@ -89,8 +99,12 @@ class CNN_trainer():
         self.print_freq = print_freq
         self.train_test_ratio = train_test_ratio
         self.model_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+        self.model_path = os.path.join(model_path, self.net, self.model_time)
+        create_dir(self.model_path)
 
         self.no_sample = no_sample  # 读取的样本数
+        self.ampRatio = ampRatio  # 是否使用幅度比值
+        self.pre_sg = pre_sg  # 数据预处理savgol滤波器参数
         self.Np2extend = Np2extend  # 扩展几个人的场景
         # 要估计的呼吸频率范围
         self.BPMresol = BPMresol
@@ -143,7 +157,8 @@ class CNN_trainer():
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_stdamp_indepStdDiffPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'
             train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # best
-            train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdAmpRatioFft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
+            train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
+            train001_180 = './chusai_data/TestData/train_shuffle_sg87_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train001_180_extend = './chusai_data/TestData/train_easyExtend_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             train001_180_extend = './chusai_data/TestData/train_easyExtend123_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320.pkl'
@@ -153,9 +168,10 @@ class CNN_trainer():
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_diffphase_gausssig100.pkl'
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig100.pkl'
             train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig100.pkl'  # best
+            # train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_indepStdAmpRatio_indepStdDiffPhase_gausssig100.pkl'  # 
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
             train180640 = './chusai_data/TestData/train_shuffle_180noStdAmp_640stdAmp_indepStdDiffPhase_gausssig100.pkl'  # very bad
-            train_pkl = train001_180
+            train_pkl = train002009_640
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -163,8 +179,11 @@ class CNN_trainer():
             else:
                 self.train_shuffle_loader = load_data_from_txt(
                     # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
+                    # '''test loader 也要改''' TODO
                     Ridx=0,
                     no_sample=self.no_sample,  # 设置读取哪种txt文件，90样本或者320样本
+                    ampRatio=self.ampRatio,  # 设置是否使用幅度比
+                    pre_sg=self.pre_sg,  # 预处理savgol滤波器参数
                     Np2extend=self.Np2extend,  # 设置是否对90样本进行扩展
                     BPMresolution=self.BPMresol,  # 设置BPM分辨率
                     batch_size=self.batch_size,  # 设置batch大小
@@ -174,15 +193,15 @@ class CNN_trainer():
                 with open(train_pkl, 'wb') as f:
                     pickle.dump(self.train_shuffle_loader, f)
 
-    def model_save(self, name="BDCNN", path="./model_save"):
+    def model_save(self, name="BDCNN"):#, path="./model_save"):
         print('Saving model...')
-        if not os.path.exists(path):
-            os.makedirs(path)
+        # path = os.path.join(path, self.net, self.model_time)
+        # create_dir(path)
         model_name = name + '_' + self.model_time + '.pkl'
-        modelPATH = os.path.join(path, self.model_time, model_name)
+        modelPATH = os.path.join(self.model_path, model_name)
         torch.save({'state_dict': self.model.state_dict(), }, modelPATH)
         # 保存模型结构
-        with open(os.path.join(path, self.model_time, model_name + '.txt'), 'w') as f:
+        with open(os.path.join(self.model_path, model_name + '.txt'), 'w') as f:
             print("epochs: ", self.epochs, file=f)
             print("lr: ", self.learning_rate, file=f)
             print("lr_decay_freq: ", self.lr_decay_freq, file=f)
@@ -192,6 +211,8 @@ class CNN_trainer():
             print("best_rmse: ", self.best_rmse, file=f)
             print("no_sample: ", self.no_sample, file=f)
             print("BPMresol: ", self.BPMresol, file=f)
+            print("ampRatio: ", self.ampRatio, file=f)
+            print("pre_sg: ", self.pre_sg, file=f)
             print("Np2extend: ", self.Np2extend, file=f)
             print(self.model, file=f)
         print('Model saved!')
@@ -204,7 +225,9 @@ class CNN_trainer():
             model_dict['state_dict'], strict=False)  # type: ignore
 
     def model_train(self):
-        writer = SummaryWriter(log_dir='./model_save/'+self.model_time+'/')
+        # logdir = os.path.join('./model_save/', self.net, self.model_time)
+        # create_dir(logdir)
+        writer = SummaryWriter(log_dir=self.model_path)
         for epoch in range(self.epochs):
             print('========================')
             print('lr:%.4e' % self.optimizer.param_groups[0]['lr'])
@@ -327,7 +350,9 @@ class CNN_trainer():
             # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
             Ridx=Ridx,
             no_sample=self.no_sample,  # 设置读取哪种txt文件，90样本或者320样本
+            ampRatio=self.ampRatio,  # 设置是否使用幅度比
             BPMresolution=self.BPMresol,  # 设置BPM分辨率
+            pre_sg=self.pre_sg,  # 预处理savgol滤波器参数
             batch_size=1,  # 设置batch大小
             shuffle=False,  # 设置是否打乱数据
             num_workers=2,  # 设置读取数据的线程数量
@@ -346,8 +371,8 @@ class CNN_trainer():
                 x_in = x_in.cuda()
                 # x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
                 print("=====================================")
-                if self.net == "BDCNN":
-                    avg_time = 100
+                if self.net == "BDCNN" or self.net == "BDInception3":
+                    avg_time = 1
                     pred_val_list = []
                     for _ in range(avg_time):
                         output = self.model(x_in).squeeze()
@@ -362,6 +387,8 @@ class CNN_trainer():
                             elif self.no_sample % 320 == 0:
                                 idx, _ = find_peaks(
                                     output_sg, distance=3/self.BPMresol)
+                            else:
+                                idx = -1
                             if not os.path.exists('find_peaks_Np3.png') and cfg['Np'] == 3:
                                 plt.figure()
                                 plt.plot(output_sg)

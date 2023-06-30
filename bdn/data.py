@@ -16,9 +16,9 @@ PathSet = {0: "./TestData", 1: "./CompetitionData1", 2: "./CompetitionData2",
             3: "./CompetitionData3", 4: "./CompetitionData4"}
 PrefixSet = {0: "Test", 1: "Round1", 2: "Round2", 3: "Round3", 4: "Round4"}
 # savgol_window_length = 8
-savgol_window_length = 5
-# savgol_polyorder = 7
-savgol_polyorder = 3
+# savgol_window_length = 5
+# # savgol_polyorder = 7
+# savgol_polyorder = 3
 
 def fft_shift_extend(data, shift, BPMrange, BPMresol):
     '''
@@ -83,7 +83,8 @@ class BreathDataset(Dataset):
                  BPMresol: float = 1, 
                  breathEnd: int = 1, 
                  no_sample: int = 90,
-                #  extend_data: bool = True,
+                 ampRatio: bool = False, # 是否采用CSI幅度比
+                 pre_sg: list = [8, 7], # savgol_filter参数
                  Np2extend: list = []):
         self.path = path
         self.round = Round
@@ -95,6 +96,8 @@ class BreathDataset(Dataset):
         Prefix = PrefixSet[Round]
 
         self.Np2extend = Np2extend
+        self.ampRatio = ampRatio
+        savgol_window_length, savgol_polyorder = pre_sg[0], pre_sg[1]
         self.noSample = 0
         if Round == 0 and len(self.Np2extend): # 训练时通过循环移位扩展数据
             # self.extend_data = True
@@ -192,16 +195,23 @@ class BreathDataset(Dataset):
                 j = 0
                 for i in range(Cfg['Nrx']):
                     for k in range(Cfg['Nsc']):
-                        ampFiltered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), savgol_window_length, savgol_polyorder)
-                        # ampFiltered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), savgol_window_length, savgol_polyorder)
-                        if no_sample % 90 != 0: # 3x30场景不scale时域幅度
-                            if (j, k) == (0, 0):
-                                ampScalar.fit(ampFiltered.reshape(-1, 1))
-                            csiAmpScaled = ampScalar.transform(ampFiltered.reshape(-1, 1)).reshape(-1)
-                            # csiAmpScaled = ampScalar.fit_transform(ampFiltered.reshape(-1, 1)).reshape(-1) # 不统一不对
-                            csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(csiAmpScaled, Ndft)[0:dftSize]
-                        else:
+                        # ampFiltered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), savgol_window_length, savgol_polyorder) # hampel+savgol性能很差
+                        if self.ampRatio:
+                            ampFiltered = scale(savgol_filter(np.abs(CSI_sam[i, j, k, :])/
+                                                            (np.abs(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :])+1e-20), 
+                                                            savgol_window_length, savgol_polyorder))
                             csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(ampFiltered, Ndft)[0:dftSize]
+                            
+                        else:
+                            ampFiltered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), savgol_window_length, savgol_polyorder)
+                            if no_sample % 90 != 0: # 3x30场景不scale时域幅度
+                                if (j, k) == (0, 0):
+                                    ampScalar.fit(ampFiltered.reshape(-1, 1))
+                                csiAmpScaled = ampScalar.transform(ampFiltered.reshape(-1, 1)).reshape(-1)
+                                # csiAmpScaled = ampScalar.fit_transform(ampFiltered.reshape(-1, 1)).reshape(-1) # 不统一不对
+                                csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(csiAmpScaled, Ndft)[0:dftSize]
+                            else:
+                                csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(ampFiltered, Ndft)[0:dftSize]
                         if self.load_pha:
                             phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]) -
                                                             np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), 
@@ -334,6 +344,8 @@ class BreathDataset(Dataset):
 def load_data_from_txt(
         Ridx = 0, # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
         no_sample = 90, # 设置样本数
+        ampRatio = False, # 设置是否使用幅度比
+        pre_sg = [8, 7], # 设置预处理滤波器参数
         Np2extend = [], # 设置需要扩展的Np
         BPMresolution = 1.0, # 设置BPM分辨率
         batch_size = 1, # 设置batch大小
@@ -356,7 +368,8 @@ def load_data_from_txt(
     num_workers : int, optional
         设置读取数据的线程数量, by default 0
     """
-    train_set = BreathDataset(Ridx, BPMresol=BPMresolution, no_sample=no_sample, Np2extend=Np2extend)
+    train_set = BreathDataset(Ridx, BPMresol=BPMresolution, no_sample=no_sample, Np2extend=Np2extend, 
+                              pre_sg=pre_sg, ampRatio=ampRatio)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
     return train_loader
 
