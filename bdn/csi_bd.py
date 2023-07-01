@@ -77,6 +77,7 @@ class CNN_trainer():
                  no_sample=320,  # 设置读取哪种txt文件，90样本或者320样本
                  preProcList=['amp', 'diffPha'], # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
                  pre_sg = [8, 7], # 数据预处理savgol滤波器参数
+                 dataBorrow=False, # 3x30场景是否借用4x80场景数据进行训练
                  Np2extend=[2, 3], # 训练时扩展几个人的场景的数据集
                  aux_logits=True, # 是否使用辅助分类器
                  BPMresol=1.0,
@@ -104,6 +105,7 @@ class CNN_trainer():
         create_dir(self.model_path)
 
         self.no_sample = no_sample  # 读取的样本数
+        self.dataBorrow = dataBorrow  # 3x30场景是否借用4x80场景数据进行训练
         self.preProcList = preProcList  # 1\2种学习的数据分别用什么
         self.pre_sg = pre_sg  # 数据预处理savgol滤波器参数
         self.Np2extend = Np2extend  # 扩展几个人的场景
@@ -112,6 +114,7 @@ class CNN_trainer():
         self.BPMresol = BPMresol
         self.breadthEnd = breathEnd
         # resol = BPMresol / 60  # 要分辨出0.1BPM，需要的频率分辨率
+        self.bpmMinMax = [5, 50]  # 呼吸频率范围
         bpmRange = np.arange(0, 60, BPMresol)
         noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
 
@@ -162,7 +165,9 @@ class CNN_trainer():
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_stdamp_indepStdDiffPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # best
-            train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
+            # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
+            train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' 
+            # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_indepStdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train001_180 = './chusai_data/TestData/train_shuffle_sg87_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train001_180_extend = './chusai_data/TestData/train_easyExtend_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
@@ -177,7 +182,7 @@ class CNN_trainer():
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_indepStdAmpRatio_indepStdDiffPhase_gausssig100.pkl'  # 
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
             train180640 = './chusai_data/TestData/train_shuffle_180noStdAmp_640stdAmp_indepStdDiffPhase_gausssig100.pkl'  # very bad
-            train_pkl = train001_180
+            train_pkl = train001_180_borrow
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -188,6 +193,7 @@ class CNN_trainer():
                     # '''test loader 也要改''' TODO
                     Ridx=0,
                     no_sample=self.no_sample,  # 设置读取哪种txt文件，90样本或者320样本
+                    dataBorrow=self.dataBorrow,  # 3x30场景是否借用4x80场景数据进行训练
                     preProcList=self.preProcList,  # 1\2种学习的数据分别用什么
                     pre_sg=self.pre_sg,  # 预处理savgol滤波器参数
                     Np2extend=self.Np2extend,  # 设置是否对90样本进行扩展
@@ -217,6 +223,7 @@ class CNN_trainer():
             print("best_rmse: ", self.best_rmse, file=f)
             print("no_sample: ", self.no_sample, file=f)
             print("BPMresol: ", self.BPMresol, file=f)
+            print("dataBorrow: ", self.dataBorrow, file=f)
             print("preProcList: ", self.preProcList, file=f)
             print("pre_sg: ", self.pre_sg, file=f)
             print("Np2extend: ", self.Np2extend, file=f)
@@ -316,6 +323,9 @@ class CNN_trainer():
                                     output_sg = output[iBatch].cpu().numpy()
                                     idx, _ = find_peaks(
                                         output_sg, distance=3/self.BPMresol)
+                                # 排除超出self.bpmMinMax范围的峰值索引
+                                idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
+                                    idx * self.BPMresol < self.bpmMinMax[1])]
                                 # 对峰值索引对应的output[iBatch]值进行降序排序
                                 highestPeak = torch.argsort(
                                     -output[iBatch][idx]).cpu()
@@ -393,16 +403,30 @@ class CNN_trainer():
                         if self.no_sample % 90 == 0 or self.no_sample % 320 == 0:
                             output_sg = savgol_filter(
                                 output.cpu().numpy(), 5, 3)
+                            # output_sg = savgol_filter(
+                            #     output.cpu().numpy(), 21, 8) # 和5,3没区别？
                             # output_sg = savgol_filter(output.cpu().numpy(), 8, 7) #不如5,3
                             # output_sg = output.cpu().numpy()
                             if self.no_sample % 90 == 0:
-                                idx, _ = find_peaks(
-                                    output_sg, distance=5.5/self.BPMresol)  # 3x30场景，复赛间隔6
+                                if cfg['Np'] == 2:
+                                    idx, _ = find_peaks(
+                                        output_sg, distance=8/self.BPMresol)  # 3x30场景，复赛间隔6
+                                elif cfg['Np'] == 3:
+                                    idx, _ = find_peaks(
+                                        output_sg, distance=5/self.BPMresol)
+                                else:
+                                    idx, _ = find_peaks(
+                                        output_sg, distance=3/self.BPMresol)
+                                # idx, _ = find_peaks(
+                                #     output_sg, distance=3/self.BPMresol)
                             elif self.no_sample % 320 == 0:
                                 idx, _ = find_peaks(
                                     output_sg, distance=3/self.BPMresol)
                             else:
-                                idx = -1
+                                idx = np.zeros(1)
+                            # 排除超出self.bpmMinMax范围的峰值索引
+                            idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
+                                idx * self.BPMresol < self.bpmMinMax[1])]
                             if not os.path.exists('find_peaks_Np3.png') and cfg['Np'] == 3:
                                 plt.figure()
                                 plt.plot(output_sg)
@@ -417,6 +441,9 @@ class CNN_trainer():
                             output_sg = output.cpu().numpy()
                             idx, _ = find_peaks(
                                 output_sg, distance=3/self.BPMresol)
+                            # 排除超出self.bpmMinMax范围的峰值索引
+                            idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
+                                idx * self.BPMresol < self.bpmMinMax[1])]
                         highestPeak = torch.argsort(-output[idx]).cpu()
                         # pred_val = torch.from_numpy(idx[highestPeak][:cfg['Np']] * self.BPMresol)
                         # pred_val = torch.sort(pred_val)[0]
@@ -445,6 +472,9 @@ class CNN_trainer():
                     # 用find_peaks求output[iBatch]的峰值索引
                     idx, _ = find_peaks(
                         output.cpu().numpy(), distance=3/self.BPMresol)
+                    # 排除超出self.bpmMinMax范围的峰值索引
+                    idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
+                        idx * self.BPMresol < self.bpmMinMax[1])]
                     # 对峰值索引对应的output[iBatch]值进行降序排序
                     highestPeak = torch.argsort(-output[idx]).cpu()
                     # 获得最高的Np个峰值索引，从而得到呼吸率估计值，转换成tensor
