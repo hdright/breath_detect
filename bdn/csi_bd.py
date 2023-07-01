@@ -75,9 +75,10 @@ class CNN_trainer():
                  #  feedbackbits=128,
                  train_now=True,
                  no_sample=320,  # 设置读取哪种txt文件，90样本或者320样本
-                 ampRatio=False, # 是否使用幅度比值
+                 preProcList=['amp', 'diffPha'], # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
                  pre_sg = [8, 7], # 数据预处理savgol滤波器参数
                  Np2extend=[2, 3], # 训练时扩展几个人的场景的数据集
+                 aux_logits=True, # 是否使用辅助分类器
                  BPMresol=1.0,
                  breathEnd=1,
                  batch_size=1,
@@ -103,9 +104,10 @@ class CNN_trainer():
         create_dir(self.model_path)
 
         self.no_sample = no_sample  # 读取的样本数
-        self.ampRatio = ampRatio  # 是否使用幅度比值
+        self.preProcList = preProcList  # 1\2种学习的数据分别用什么
         self.pre_sg = pre_sg  # 数据预处理savgol滤波器参数
         self.Np2extend = Np2extend  # 扩展几个人的场景
+        self.aux_logits = aux_logits and (net == 'BDInception3')  # 是否使用辅助分类器
         # 要估计的呼吸频率范围
         self.BPMresol = BPMresol
         self.breadthEnd = breathEnd
@@ -113,7 +115,10 @@ class CNN_trainer():
         bpmRange = np.arange(0, 60, BPMresol)
         noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
 
-        self.model = eval(net)(input_sample=no_sample, output_size=noBpmPoints)
+        if self.aux_logits:
+            self.model = eval(net)(input_sample=no_sample, output_size=noBpmPoints, aux_logits=True)
+        else:
+            self.model = eval(net)(input_sample=no_sample, output_size=noBpmPoints)
         print("noBpmPoints: ", noBpmPoints)
         self.x_label = []
         self.y_label = []
@@ -156,9 +161,10 @@ class CNN_trainer():
             # train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_stdamp_indepStdDiffPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'
-            train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # best
-            train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
-            train001_180 = './chusai_data/TestData/train_shuffle_sg87_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
+            # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # best
+            train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
+            # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
+            # train001_180 = './chusai_data/TestData/train_shuffle_sg87_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train001_180_extend = './chusai_data/TestData/train_easyExtend_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             train001_180_extend = './chusai_data/TestData/train_easyExtend123_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train90320 = './chusai_data/TestData/train_shuffle_loader_stdfft_gaussianlabelsig1_90320.pkl'
@@ -171,7 +177,7 @@ class CNN_trainer():
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_indepStdAmpRatio_indepStdDiffPhase_gausssig100.pkl'  # 
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
             train180640 = './chusai_data/TestData/train_shuffle_180noStdAmp_640stdAmp_indepStdDiffPhase_gausssig100.pkl'  # very bad
-            train_pkl = train002009_640
+            train_pkl = train001_180
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -182,7 +188,7 @@ class CNN_trainer():
                     # '''test loader 也要改''' TODO
                     Ridx=0,
                     no_sample=self.no_sample,  # 设置读取哪种txt文件，90样本或者320样本
-                    ampRatio=self.ampRatio,  # 设置是否使用幅度比
+                    preProcList=self.preProcList,  # 1\2种学习的数据分别用什么
                     pre_sg=self.pre_sg,  # 预处理savgol滤波器参数
                     Np2extend=self.Np2extend,  # 设置是否对90样本进行扩展
                     BPMresolution=self.BPMresol,  # 设置BPM分辨率
@@ -211,9 +217,10 @@ class CNN_trainer():
             print("best_rmse: ", self.best_rmse, file=f)
             print("no_sample: ", self.no_sample, file=f)
             print("BPMresol: ", self.BPMresol, file=f)
-            print("ampRatio: ", self.ampRatio, file=f)
+            print("preProcList: ", self.preProcList, file=f)
             print("pre_sg: ", self.pre_sg, file=f)
             print("Np2extend: ", self.Np2extend, file=f)
+            print("aux_logits: ", self.aux_logits, file=f)
             print(self.model, file=f)
         print('Model saved!')
 
@@ -251,11 +258,18 @@ class CNN_trainer():
                 x_in = x_in.cuda()  # input [batch=1, 320, 600]
                 # x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600] # 取消这个操作，因为在load_data_from_txt中已经增加了一个维度
                 # print("x_in.shape:", x_in.shape)
-                output = self.model(x_in)  # .squeeze()
-                # print("output.shape:", output.shape)
-                label = label.cuda()
-                # print("label.shape:", label.shape)
-                loss = self.criterion(output, label)
+                if self.aux_logits:
+                    output, aux_logits = self.model(x_in)
+                    label = label.cuda()
+                    loss0 = self.criterion(output, label)
+                    loss1 = self.criterion(aux_logits, label)
+                    loss = loss0 + 0.4 * loss1
+                else:
+                    output = self.model(x_in)  # .squeeze()
+                    # print("output.shape:", output.shape)
+                    label = label.cuda()
+                    # print("label.shape:", label.shape)
+                    loss = self.criterion(output, label)
                 loss.backward()
                 self.optimizer.step()
                 if i % self.print_freq == 0:
@@ -350,7 +364,7 @@ class CNN_trainer():
             # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
             Ridx=Ridx,
             no_sample=self.no_sample,  # 设置读取哪种txt文件，90样本或者320样本
-            ampRatio=self.ampRatio,  # 设置是否使用幅度比
+            preProcList=self.preProcList,  # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
             BPMresolution=self.BPMresol,  # 设置BPM分辨率
             pre_sg=self.pre_sg,  # 预处理savgol滤波器参数
             batch_size=1,  # 设置batch大小

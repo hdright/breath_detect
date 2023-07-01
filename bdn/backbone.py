@@ -31,17 +31,22 @@ from torchvision.models.inception import InceptionA, InceptionB, InceptionC, Inc
 #     return BDInception3(**kwargs)
 class InceptionAux(nn.Module):
 
-    def __init__(self, in_channels, output_size):
+    def __init__(self, in_channels, output_size, input_sample=640):
         super(InceptionAux, self).__init__()
-        self.conv0 = BasicConv2d(in_channels, 128, kernel_size=1, padding=1)
-        self.conv1 = BasicConv2d(128, 768, kernel_size=5)
+        self.input_sample = input_sample
+        assert self.input_sample in [180, 640]
+        self.conv0 = BasicConv2d(in_channels, 128, kernel_size=1)
+        if self.input_sample == 640:
+            self.conv1 = BasicConv2d(128, 768, kernel_size=5)
+        else:
+            self.conv1 = BasicConv2d(128, 768, kernel_size=(4, 5))
         self.conv1.stddev = torch.tensor(0.01)
         self.fc = nn.Linear(768, output_size)
         self.fc.stddev = torch.tensor(0.001)
 
     def forward(self, x):
         # 17 x 17 x 768
-        x = F.avg_pool2d(x, kernel_size=5, stride=3)
+        x = F.avg_pool2d(x, kernel_size=5, stride=3, padding=1)
         # 5 x 5 x 768
         x = self.conv0(x)
         # 5 x 5 x 128
@@ -58,26 +63,49 @@ class BDInception3(nn.Module):
     def __init__(self, input_sample=640, output_size=600, aux_logits=False):
         super(BDInception3, self).__init__()
         self.aux_logits = aux_logits
+        self.input_sample = input_sample
         # self.transform_input = transform_input
-        self.Conv2d_1a_3x3 = BasicConv2d(2, 32, kernel_size=40, stride=(2, 4))
-        self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3)
-        self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, padding=1)
-        self.Conv2d_3b_1x1 = BasicConv2d(64, 80, kernel_size=1)
-        self.Conv2d_4a_3x3 = BasicConv2d(80, 192, kernel_size=3)
-        self.Mixed_5b = InceptionA(192, pool_features=32)
-        self.Mixed_5c = InceptionA(256, pool_features=64)
-        self.Mixed_5d = InceptionA(288, pool_features=64)
-        self.Mixed_6a = InceptionB(288)
-        self.Mixed_6b = InceptionC(768, channels_7x7=128)
-        self.Mixed_6c = InceptionC(768, channels_7x7=160)
-        self.Mixed_6d = InceptionC(768, channels_7x7=160)
-        self.Mixed_6e = InceptionC(768, channels_7x7=192)
-        if aux_logits:
-            self.AuxLogits = InceptionAux(768, output_size)
-        self.Mixed_7a = InceptionD(768)
-        self.Mixed_7b = InceptionE(1280)
-        self.Mixed_7c = InceptionE(2048)
-        self.fc = nn.Linear(2048, output_size)
+        assert self.input_sample in [180, 640]
+        if input_sample == 640:
+            self.Conv2d_1a_3x3 = BasicConv2d(2, 32, kernel_size=40, stride=(2, 4))
+            self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3)
+            self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, padding=1)
+            self.Conv2d_3b_1x1 = BasicConv2d(64, 80, kernel_size=1)
+            self.Conv2d_4a_3x3 = BasicConv2d(80, 192, kernel_size=3)
+            self.Mixed_5b = InceptionA(192, pool_features=32)
+            self.Mixed_5c = InceptionA(256, pool_features=64)
+            self.Mixed_5d = InceptionA(288, pool_features=64)
+            self.Mixed_6a = InceptionB(288)
+            self.Mixed_6b = InceptionC(768, channels_7x7=128)
+            self.Mixed_6c = InceptionC(768, channels_7x7=160)
+            self.Mixed_6d = InceptionC(768, channels_7x7=160)
+            self.Mixed_6e = InceptionC(768, channels_7x7=192)
+            if aux_logits:
+                self.AuxLogits = InceptionAux(768, output_size)
+            self.Mixed_7a = InceptionD(768)
+            self.Mixed_7b = InceptionE(1280)
+            self.Mixed_7c = InceptionE(2048)
+            self.fc = nn.Linear(2048, output_size)
+        else:
+            self.Conv2d_1a_3x3 = BasicConv2d(2, 32, kernel_size=(30, 40), stride=(1, 4))
+            self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3)
+            self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, padding=1)
+            self.Conv2d_3b_1x1 = BasicConv2d(64, 80, kernel_size=1)
+            self.Conv2d_4a_3x3 = BasicConv2d(80, 192, kernel_size=3)
+            self.Mixed_5b = InceptionA(192, pool_features=32)
+            self.Mixed_5c = InceptionA(256, pool_features=64)
+            self.Mixed_5d = InceptionA(288, pool_features=64)
+            self.Mixed_6a = InceptionB(288)
+            self.Mixed_6b = InceptionC(768, channels_7x7=128)
+            self.Mixed_6c = InceptionC(768, channels_7x7=160)
+            self.Mixed_6d = InceptionC(768, channels_7x7=160)
+            self.Mixed_6e = InceptionC(768, channels_7x7=192)
+            if aux_logits:
+                self.AuxLogits = InceptionAux(768, output_size)
+            self.Mixed_7a = InceptionD(768)
+            self.Mixed_7b = InceptionE(1280)
+            self.Mixed_7c = InceptionE(2048)
+            self.fc = nn.Linear(2048, output_size)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
@@ -97,54 +125,103 @@ class BDInception3(nn.Module):
         #     x[:, 0] = x[:, 0] * (0.229 / 0.5) + (0.485 - 0.5) / 0.5
         #     x[:, 1] = x[:, 1] * (0.224 / 0.5) + (0.456 - 0.5) / 0.5
         #     x[:, 2] = x[:, 2] * (0.225 / 0.5) + (0.406 - 0.5) / 0.5
-        # 320 x 600 x 3
-        x = self.Conv2d_1a_3x3(x)
-        # 141 x 141 x 32
-        x = self.Conv2d_2a_3x3(x)
-        # 139 x 139 x 32
-        x = self.Conv2d_2b_3x3(x)
-        # 139 x 139 x 64
-        x = F.max_pool2d(x, kernel_size=3, stride=2)
-        # 69 x 69 x 64
-        x = self.Conv2d_3b_1x1(x)
-        # 69 x 69 x 80
-        x = self.Conv2d_4a_3x3(x)
-        # 67 x 67 x 192
-        x = F.max_pool2d(x, kernel_size=3, stride=2)
-        # 33 x 33 x 192
-        x = self.Mixed_5b(x)
-        # 33 x 33 x 256
-        x = self.Mixed_5c(x)
-        # 33 x 33 x 288
-        x = self.Mixed_5d(x)
-        # 33 x 33 x 288
-        x = self.Mixed_6a(x)
-        # 16 x 16 x 768
-        x = self.Mixed_6b(x)
-        # 16 x 16 x 768
-        x = self.Mixed_6c(x)
-        # 16 x 16 x 768
-        x = self.Mixed_6d(x)
-        # 16 x 16 x 768
-        x = self.Mixed_6e(x)
-        # 16 x 16 x 768
-        if self.training and self.aux_logits:
-            aux = self.AuxLogits(x)
-        # 16 x 16 x 768
-        x = self.Mixed_7a(x)
-        # 7 x 7 x 1280
-        x = self.Mixed_7b(x)
-        # 7 x 7 x 2048
-        x = self.Mixed_7c(x)
-        # 7 x 7 x 2048
-        x = F.avg_pool2d(x, kernel_size=7)
-        # 1 x 1 x 2048
-        x = F.dropout(x, training=self.training)
-        # 1 x 1 x 2048
-        x = x.view(x.size(0), -1)
-        # 2048
-        x = self.fc(x)
-        # 1000 (output_size)
+        if self.input_sample == 640:
+            # 320 x 600 x 2
+            x = self.Conv2d_1a_3x3(x)
+            # 141 x 141 x 32
+            x = self.Conv2d_2a_3x3(x)
+            # 139 x 139 x 32
+            x = self.Conv2d_2b_3x3(x)
+            # 139 x 139 x 64
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            # 69 x 69 x 64
+            x = self.Conv2d_3b_1x1(x)
+            # 69 x 69 x 80
+            x = self.Conv2d_4a_3x3(x)
+            # 67 x 67 x 192
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            # 33 x 33 x 192
+            x = self.Mixed_5b(x)
+            # 33 x 33 x 256
+            x = self.Mixed_5c(x)
+            # 33 x 33 x 288
+            x = self.Mixed_5d(x)
+            # 33 x 33 x 288
+            x = self.Mixed_6a(x)
+            # 16 x 16 x 768
+            x = self.Mixed_6b(x)
+            # 16 x 16 x 768
+            x = self.Mixed_6c(x)
+            # 16 x 16 x 768
+            x = self.Mixed_6d(x)
+            # 16 x 16 x 768
+            x = self.Mixed_6e(x)
+            # 16 x 16 x 768
+            if self.training and self.aux_logits:
+                aux = self.AuxLogits(x)
+            # 16 x 16 x 768
+            x = self.Mixed_7a(x)
+            # 7 x 7 x 1280
+            x = self.Mixed_7b(x)
+            # 7 x 7 x 2048
+            x = self.Mixed_7c(x)
+            # 7 x 7 x 2048
+            x = F.avg_pool2d(x, kernel_size=7)
+            # 1 x 1 x 2048
+            x = F.dropout(x, training=self.training)
+            # 1 x 1 x 2048
+            x = x.view(x.size(0), -1)
+            # 2048
+            x = self.fc(x)
+        else:
+            # 90 x 600 x 2
+            x = self.Conv2d_1a_3x3(x)
+            # 61 x 141 x 32
+            x = self.Conv2d_2a_3x3(x)
+            # 59 x 139 x 32
+            x = self.Conv2d_2b_3x3(x)
+            # 59 x 139 x 64
+            x = F.max_pool2d(x, kernel_size=(1, 3), stride=(1, 2))
+            # 59 x 69 x 64
+            x = self.Conv2d_3b_1x1(x)
+            # 59 x 69 x 80
+            x = self.Conv2d_4a_3x3(x)
+            # 57 x 67 x 192
+            x = F.max_pool2d(x, kernel_size=3, stride=2)
+            # 28 x 33 x 192
+            x = self.Mixed_5b(x)
+            # 28 x 33 x 256
+            x = self.Mixed_5c(x)
+            # 28 x 33 x 288
+            x = self.Mixed_5d(x)
+            # 28 x 33 x 288
+            x = self.Mixed_6a(x)
+            # 13 x 16 x 768
+            x = self.Mixed_6b(x)
+            # 13 x 16 x 768
+            x = self.Mixed_6c(x)
+            # 13 x 16 x 768
+            x = self.Mixed_6d(x)
+            # 13 x 16 x 768
+            x = self.Mixed_6e(x)
+            # 13 x 16 x 768
+            if self.training and self.aux_logits:
+                aux = self.AuxLogits(x)
+            # 13 x 16 x 768
+            x = self.Mixed_7a(x)
+            # 6 x 7 x 1280
+            x = self.Mixed_7b(x)
+            # 6 x 7 x 2048
+            x = self.Mixed_7c(x)
+            # 6 x 7 x 2048
+            x = F.avg_pool2d(x, kernel_size=(6, 7))
+            # 1 x 1 x 2048
+            x = F.dropout(x, training=self.training)
+            # 1 x 1 x 2048
+            x = x.view(x.size(0), -1)
+            # 2048
+            x = self.fc(x)
+        # 600 (output_size)
         if self.training and self.aux_logits:
             return x, aux
         return x

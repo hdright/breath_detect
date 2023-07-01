@@ -77,26 +77,41 @@ def generate_gaussian_pulses(noBpmPoints, BPMresol, cfg, shift=0):
         gt_pd += np.exp(-(x - mu) ** 2 / (2 * sigma2)) / np.sqrt(2 * np.pi * sigma2) / cfg['Np']
     return gt_pd
 
+allDataFormats = ['amp', 'diffPha', 'ampRatio', 'pha']
+
 class BreathDataset(Dataset):
     def __init__(self, Round: int, 
                  path: str = "./chusai_data/", 
                  BPMresol: float = 1, 
                  breathEnd: int = 1, 
                  no_sample: int = 90,
-                 ampRatio: bool = False, # 是否采用CSI幅度比
+                #  ampRatio: bool = False, # 是否采用CSI幅度比
+                 preProcList: list = ['amp', 'diffPha'], # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
                  pre_sg: list = [8, 7], # savgol_filter参数
-                 Np2extend: list = []):
+                 Np2extend: list = []): # 通过循环移位扩充3x30场景数据
         self.path = path
         self.round = Round
         if no_sample in [640, 180, 180640]:
-            self.load_pha = True
+            self.load_2axis = True
         else:
-            self.load_pha = False
+            self.load_2axis = False
+        if self.load_2axis:
+            assert preProcList[0] in allDataFormats, 'preProcList[0] must be in ' + str(allDataFormats)
+            assert preProcList[1] in allDataFormats, 'preProcList[1] must be in ' + str(allDataFormats)
+            assert preProcList[0] != preProcList[1], 'preProcList[0] and preProcList[1] must be different'
+        else:
+            assert preProcList[0] in allDataFormats, 'preProcList[0] must be in ' + str(allDataFormats)
+
+        self.preProcList = preProcList
+        self.loadAmp = 'amp' in self.preProcList
+        self.loadAmpRa = 'ampRatio' in self.preProcList
+        self.loadDiffPha = 'ampRatio' in self.preProcList
+
         PathRaw = os.path.join(path, PathSet[Round])
         Prefix = PrefixSet[Round]
 
         self.Np2extend = Np2extend
-        self.ampRatio = ampRatio
+        # self.ampRatio = ampRatio
         savgol_window_length, savgol_polyorder = pre_sg[0], pre_sg[1]
         self.noSample = 0
         if Round == 0 and len(self.Np2extend): # 训练时通过循环移位扩展数据
@@ -143,9 +158,9 @@ class BreathDataset(Dataset):
             names = []
             raise ValueError('no_sample should be 90 or 320')
         ampScalar = StandardScaler()
-        phaScalar = StandardScaler()
-        ampFftScaler = StandardScaler()
-        phaFftScaler = StandardScaler()
+        # phaScalar = StandardScaler()
+        axis0FftScaler = StandardScaler()
+        axis1FftScaler = StandardScaler()
         for na in names:  # 舍去第一个文件
             print("Loading %s InputData %s / %d" % (Prefix, na, len(self.names)))
             # print("%s / %d" % (na, len(self.names)))
@@ -188,31 +203,41 @@ class BreathDataset(Dataset):
                 # 要估计的呼吸频率范围
                 bpmRange = np.arange(0, 60, BPMresol)
                 noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
-
-                csiAmpFft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
-                if self.load_pha:
-                    csiPhaFft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
+                if self.loadAmp:
+                    csiAmpFft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
+                else:
+                    csiAmpFft = np.zeros(1)
+                if self.loadAmpRa:
+                    csiAmpRaFft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
+                else:
+                    csiAmpRaFft = np.zeros(1)
+                # if self.load_2axis:
+                if self.loadDiffPha:
+                    csiDiffPhaFft = np.zeros((Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'], dftSize), dtype=complex)
+                else:
+                    csiDiffPhaFft = np.zeros(1)
                 j = 0
                 for i in range(Cfg['Nrx']):
                     for k in range(Cfg['Nsc']):
                         # ampFiltered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), savgol_window_length, savgol_polyorder) # hampel+savgol性能很差
-                        if self.ampRatio:
+                        # if self.ampRatio:
+                        if self.loadAmpRa:
                             ampFiltered = scale(savgol_filter(np.abs(CSI_sam[i, j, k, :])/
                                                             (np.abs(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :])+1e-20), 
                                                             savgol_window_length, savgol_polyorder))
-                            csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(ampFiltered, Ndft)[0:dftSize]
-                            
-                        else:
+                            csiAmpRaFft[i * Cfg['Nsc'] + k] = np.fft.fft(ampFiltered, Ndft)[0:dftSize] #
+                        if self.loadAmp:
                             ampFiltered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), savgol_window_length, savgol_polyorder)
-                            if no_sample % 90 != 0: # 3x30场景不scale时域幅度
+                            if no_sample % 90 != 0: # 4x80场景统一scale时域幅度
                                 if (j, k) == (0, 0):
                                     ampScalar.fit(ampFiltered.reshape(-1, 1))
                                 csiAmpScaled = ampScalar.transform(ampFiltered.reshape(-1, 1)).reshape(-1)
                                 # csiAmpScaled = ampScalar.fit_transform(ampFiltered.reshape(-1, 1)).reshape(-1) # 不统一不对
                                 csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(csiAmpScaled, Ndft)[0:dftSize]
-                            else:
+                            else: # 3x30场景不scale时域幅度
                                 csiAmpFft[i * Cfg['Nsc'] + k] = np.fft.fft(ampFiltered, Ndft)[0:dftSize]
-                        if self.load_pha:
+                        # if self.load_2axis:
+                        if self.loadDiffPha:
                             phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]) -
                                                             np.angle(CSI_sam[(i+1)%Cfg['Nrx'], j, k, :]), 
                                                             savgol_window_length, savgol_polyorder)
@@ -223,28 +248,58 @@ class BreathDataset(Dataset):
                             #     phaFiltered = savgol_filter(np.angle(CSI_sam[i, j, k, :]), savgol_window_length, savgol_polyorder)
                             # 独立std
                             phaScaled = scale(phaFiltered)
-                            csiPhaFft[i * Cfg['Nsc'] + k] = np.fft.fft(phaScaled, Ndft)[0:dftSize]
-                csiAmpFft = np.abs(csiAmpFft)
-                csiPhaFft = np.abs(csiPhaFft)
+                            csiDiffPhaFft[i * Cfg['Nsc'] + k] = np.fft.fft(phaScaled, Ndft)[0:dftSize]
+                if self.loadAmpRa:
+                    csiAmpRaFft = np.abs(csiAmpRaFft)
+                if self.loadAmp:
+                    csiAmpFft = np.abs(csiAmpFft)
+                if self.loadDiffPha:
+                    csiDiffPhaFft = np.abs(csiDiffPhaFft)
                 # if no_sample == 90320 or no_sample == 90:
+                match self.preProcList[0]:
+                    case 'amp':
+                        csiAxis0Fft = csiAmpFft
+                    case 'ampRatio':
+                        csiAxis0Fft = csiAmpRaFft
+                    case 'diffPha':
+                        csiAxis0Fft = csiDiffPhaFft
+                    # case 'pha':
+                    #     pass
+                    case _:
+                        csiAxis0Fft = csiDiffPhaFft
+                        raise ValueError('preProcList[0] error')
+                
+                match self.preProcList[1]:
+                    case 'amp':
+                        csiAxis1Fft = csiAmpFft
+                    case 'ampRatio':
+                        csiAxis1Fft = csiAmpRaFft
+                    case 'diffPha':
+                        csiAxis1Fft = csiDiffPhaFft
+                    # case 'pha':
+                    #     pass
+                    case _:
+                        csiAxis1Fft = csiDiffPhaFft
+                        raise ValueError('preProcList[1] error')
+
                 if no_sample == 180640:
                     if Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'] == 90:
                         # 将90*600的csiAmpFft和csiPhaFft矩阵扩展为320*600
-                        CSIamp_stretch_sc = np.zeros((120, noBpmPoints))
-                        CSIamp_stretch_rx = np.zeros((320, noBpmPoints))
-                        CSIpha_stretch_sc = np.zeros((120, noBpmPoints))
-                        CSIpha_stretch_rx = np.zeros((320, noBpmPoints))
+                        CsiAxis0StretchSc = np.zeros((120, noBpmPoints))
+                        CsiAxis0StretchRx = np.zeros((320, noBpmPoints))
+                        CsiAxis1StretchSc = np.zeros((120, noBpmPoints))
+                        CsiAxis1StretchRx = np.zeros((320, noBpmPoints))
                         # 每30行拉伸为40行
                         for i in range(3):
-                            CSIamp_stretch_sc[i*40:(i+1)*40, :] = transform.resize(csiAmpFft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
-                            CSIpha_stretch_sc[i*40:(i+1)*40, :] = transform.resize(csiPhaFft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
+                            CsiAxis0StretchSc[i*40:(i+1)*40, :] = transform.resize(csiAxis0Fft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
+                            CsiAxis1StretchSc[i*40:(i+1)*40, :] = transform.resize(csiAxis1Fft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
                         # 120行中，每隔40行取一行，一共能取3行（如0、40、80，等差数列），拉伸为8行，形成320行
                         for i in range(40):
                             sc_idx = np.arange(i, 120, 40)
-                            CSIamp_stretch_rx[i*8:(i+1)*8, :] = transform.resize(CSIamp_stretch_sc[sc_idx, :], (8, noBpmPoints), order=3)
-                            CSIpha_stretch_rx[i*8:(i+1)*8, :] = transform.resize(CSIpha_stretch_sc[sc_idx, :], (8, noBpmPoints), order=3)
-                        csiAmpFft = CSIamp_stretch_rx
-                        csiPhaFft = CSIpha_stretch_rx
+                            CsiAxis0StretchRx[i*8:(i+1)*8, :] = transform.resize(CsiAxis0StretchSc[sc_idx, :], (8, noBpmPoints), order=3)
+                            CsiAxis1StretchRx[i*8:(i+1)*8, :] = transform.resize(CsiAxis1StretchSc[sc_idx, :], (8, noBpmPoints), order=3)
+                        csiAxis0Fft = CsiAxis0StretchRx
+                        csiAxis1Fft = CsiAxis1StretchRx
                 elif no_sample == 90320:
                     if Cfg['Nrx'] * Cfg['Ntx'] * Cfg['Nsc'] == 90:
                         # 将90*600的fft矩阵扩展为320*600
@@ -252,28 +307,28 @@ class BreathDataset(Dataset):
                         CSIfft_stretch_rx = np.zeros((320, noBpmPoints))
                         # 每30行拉伸为40行
                         for i in range(3):
-                            CSIfft_stretch_sc[i*40:(i+1)*40, :] = transform.resize(csiAmpFft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
+                            CSIfft_stretch_sc[i*40:(i+1)*40, :] = transform.resize(csiAxis0Fft[i*30:(i+1)*30, :], (40, noBpmPoints), order=3)
                         # 120行中，每隔40行取一行，一共能取3行（如0、40、80，等差数列），拉伸为8行，形成320行
                         for i in range(40):
                             sc_idx = np.arange(i, 120, 40)
                             rx_idx = np.arange(i, 320, 40)
                             CSIfft_stretch_rx[rx_idx, :] = transform.resize(CSIfft_stretch_sc[sc_idx, :], (8, noBpmPoints), order=3)
-                        csiAmpFft = CSIfft_stretch_rx
+                        csiAxis0Fft = CSIfft_stretch_rx
                         
                 # CSIfft按行标准化
-                csiAmpFft = ampFftScaler.fit_transform(csiAmpFft.T).T
-                csiPhaFft = phaFftScaler.fit_transform(csiPhaFft.T).T
+                csiAxis0Fft = axis0FftScaler.fit_transform(csiAxis0Fft.T).T
+                csiAxis1Fft = axis1FftScaler.fit_transform(csiAxis1Fft.T).T
                 # # CSIfft按列标准化
-                # csiAmpFft = ampFftScaler.fit_transform(csiAmpFft)
-                # csiPhaFft = phaFftScaler.fit_transform(csiPhaFft)
+                # csiAxis0Fft = axis0FftScaler.fit_transform(csiAxis0Fft)
+                # csiAxis1Fft = axis1FftScaler.fit_transform(csiAxis1Fft)
                 # 在现有的0axis之前创建一个新axis，并组合csiAmpFft和csiPhaFft
-                csiAmpFft = np.expand_dims(csiAmpFft, axis=0)
-                csiPhaFft = np.expand_dims(csiPhaFft, axis=0)
-                csiFft = np.concatenate((csiAmpFft, csiPhaFft), axis=0)
-                if self.load_pha:
+                csiAxis0Fft = np.expand_dims(csiAxis0Fft, axis=0)
+                csiAxis1Fft = np.expand_dims(csiAxis1Fft, axis=0)
+                csiFft = np.concatenate((csiAxis0Fft, csiAxis1Fft), axis=0)
+                if self.load_2axis:
                     self.CSI_fft.append(csiFft.astype(np.float32))
                 else:
-                    self.CSI_fft.append(csiAmpFft.astype(np.float32))
+                    self.CSI_fft.append(csiAxis0Fft.astype(np.float32))
 
                 # 生成标签数据，是cfg['gt']的概率的类one-hot编码
                 if self.round == 0:
@@ -344,7 +399,7 @@ class BreathDataset(Dataset):
 def load_data_from_txt(
         Ridx = 0, # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
         no_sample = 90, # 设置样本数
-        ampRatio = False, # 设置是否使用幅度比
+        preProcList = ['amp', 'diffPha'], # 1\2种学习的数据分别用什么
         pre_sg = [8, 7], # 设置预处理滤波器参数
         Np2extend = [], # 设置需要扩展的Np
         BPMresolution = 1.0, # 设置BPM分辨率
@@ -369,7 +424,7 @@ def load_data_from_txt(
         设置读取数据的线程数量, by default 0
     """
     train_set = BreathDataset(Ridx, BPMresol=BPMresolution, no_sample=no_sample, Np2extend=Np2extend, 
-                              pre_sg=pre_sg, ampRatio=ampRatio)
+                              pre_sg=pre_sg, preProcList=preProcList)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
     return train_loader
 
