@@ -237,13 +237,13 @@ class BreathDataset(Dataset):
                         # ampFiltered = savgol_filter(hampelpd(np.abs(CSI_sam[i, j, k, :]), 400), savgol_window_length, savgol_polyorder) # hampel+savgol性能很差
                         # if self.ampRatio:
                         if self.loadAmpRa:
-                            ampFiltered = scale(savgol_filter(np.abs(CSI_sam[i, j, k, :])/
-                                                            (np.abs(CSI_sam[(i+1)%cfg['Nrx'], j, k, :])+1e-20), 
+                            ampFiltered = scale(savgol_filter(np.abs(CSI_sam[i, j, k, :]/
+                                                            np.where(CSI_sam[(i+1)%cfg['Nrx'], j, k, :] == 0, 1, CSI_sam[(i+1)%cfg['Nrx'], j, k, :])), 
                                                             savgol_window_length, savgol_polyorder))
                             csiAmpRaFft[i * cfg['Nsc'] + k] = np.fft.fft(ampFiltered, Ndft)[0:dftSize] #
                         if self.loadAmp:
                             ampFiltered = savgol_filter(np.abs(CSI_sam[i, j, k, :]), savgol_window_length, savgol_polyorder)
-                            if no_sample % 90 != 0: # 4x80场景统一scale时域幅度
+                            if no_sample % 90 == 0: # 4x80场景统一scale时域幅度 TODO
                                 if (j, k) == (0, 0):
                                     ampScalar.fit(ampFiltered.reshape(-1, 1))
                                 csiAmpScaled = ampScalar.transform(ampFiltered.reshape(-1, 1)).reshape(-1)

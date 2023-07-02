@@ -102,7 +102,8 @@ class CNN_trainer():
         self.train_test_ratio = train_test_ratio
         self.model_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
         self.model_path = os.path.join(model_path, self.net, self.model_time)
-        create_dir(self.model_path)
+        if train_now:
+            create_dir(self.model_path)
 
         self.no_sample = no_sample  # 读取的样本数
         self.dataBorrow = dataBorrow  # 3x30场景是否借用4x80场景数据进行训练
@@ -164,9 +165,13 @@ class CNN_trainer():
             # train001_180 = './chusai_data/TestData/train_shuffle_loader_stdampfft_stdamp_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_stdamp_indepStdDiffPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'
-            # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # best
+            # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # best 2nd
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
-            train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' 
+            train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # best
+            # train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg87_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # 
+            train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_uniStdAmp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' #
+            # train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow-batch44_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # 
+            # train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdAmpRa_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' 
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_indepStdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             # train001_180 = './chusai_data/TestData/train_shuffle_sg87_stdAmpFft_indepStdAmpRatio_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # 
@@ -391,13 +396,19 @@ class CNN_trainer():
                 na_last = cfg['na']
                 break
             print("Prediciting file: ", na_last)
-            for _, (x_in, cfg) in enumerate(self.test_loader):  # Fix for unused variable
+            pic_folder_time = time.strftime(
+                        "%Y-%m-%d_%H:%M:%S", time.localtime())
+            pic_folder = "./pic/" + pic_folder_time
+            create_dir(pic_folder)
+            for i_test, (x_in, cfg) in enumerate(self.test_loader):  # Fix for unused variable
                 x_in = x_in.cuda()
                 # x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
                 print("=====================================")
                 if self.net == "BDCNN" or self.net == "BDInception3":
                     avg_time = 1
                     pred_val_list = []
+                    # 获取当前字符串
+                    pic_time = str(i_test)
                     for _ in range(avg_time):
                         output = self.model(x_in).squeeze()
                         if self.no_sample % 90 == 0 or self.no_sample % 320 == 0:
@@ -419,25 +430,37 @@ class CNN_trainer():
                                         output_sg, distance=3/self.BPMresol)
                                 # idx, _ = find_peaks(
                                 #     output_sg, distance=3/self.BPMresol)
+                                # 排除超出self.bpmMinMax范围的峰值索引
+                                if cfg['Np'] == 1:
+                                    idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
+                                        idx * self.BPMresol < self.bpmMinMax[1])]
+                                elif cfg['Np'] == 2:
+                                    idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
+                                        idx * self.BPMresol < 30)]
+                                elif cfg['Np'] == 3:
+                                    idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
+                                        idx * self.BPMresol < 30)]
                             elif self.no_sample % 320 == 0:
                                 idx, _ = find_peaks(
                                     output_sg, distance=3/self.BPMresol)
+                                idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
+                                        idx * self.BPMresol < self.bpmMinMax[1])]
                             else:
                                 idx = np.zeros(1)
-                            # 排除超出self.bpmMinMax范围的峰值索引
-                            idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (
-                                idx * self.BPMresol < self.bpmMinMax[1])]
-                            if not os.path.exists('find_peaks_Np3.png') and cfg['Np'] == 3:
+                            
+                            picNp3 = os.path.join(pic_folder, "%s_Np3.jpg" % pic_time)
+                            picNp2 = os.path.join(pic_folder, "%s_Np2.jpg" % pic_time)
+                            if not os.path.exists(picNp3) and cfg['Np'] == 3:
                                 plt.figure()
                                 plt.plot(output_sg)
                                 plt.plot(idx, output_sg[idx], 'x')
-                                plt.savefig('find_peaks_Np3.png')
-                            if not os.path.exists('find_peaks_Np2.png') and cfg['Np'] == 2:
+                                plt.savefig(picNp3)
+                            if not os.path.exists(picNp2) and cfg['Np'] == 2:
                                 plt.figure()
                                 plt.plot(output_sg)
                                 plt.plot(idx, output_sg[idx], 'x')
-                                plt.savefig('find_peaks_Np2.png')
-                        else:
+                                plt.savefig(picNp2)
+                        else: # 90样本/320样本
                             output_sg = output.cpu().numpy()
                             idx, _ = find_peaks(
                                 output_sg, distance=3/self.BPMresol)
@@ -490,6 +513,11 @@ class CNN_trainer():
                     save_data_to_txt(pred_val_file, na_last, Ridx)
                     pred_val_file = []
                     na_last = cfg['na']
+                if self.no_sample % 90 == 0:
+                    if cfg['Np'] == 3:
+                        pred_val[2] += 3
+                    elif cfg['Np'] == 2:
+                        pred_val[1] += 3
                 pred_val_file.append(pred_val)
             save_data_to_txt(pred_val_file, cfg['na'], Ridx)
 

@@ -88,6 +88,7 @@ class BDInception3(nn.Module):
             self.fc = nn.Linear(2048, output_size)
         else:
             self.Conv2d_1a_3x3 = BasicConv2d(2, 32, kernel_size=(30, 40), stride=(1, 4))
+            # self.Conv2d_1a_3x3 = BasicConv2d(2, 32, kernel_size=(16, 40), stride=(1, 4))
             self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3)
             self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, padding=1)
             self.Conv2d_3b_1x1 = BasicConv2d(64, 80, kernel_size=1)
@@ -182,6 +183,7 @@ class BDInception3(nn.Module):
             x = self.Conv2d_2b_3x3(x)
             # 59 x 139 x 64
             x = F.max_pool2d(x, kernel_size=(1, 3), stride=(1, 2))
+            # x = F.max_pool2d(x, kernel_size=(3, 3), stride=(2, 2))
             # 59 x 69 x 64
             x = self.Conv2d_3b_1x1(x)
             # 59 x 69 x 80
@@ -215,6 +217,7 @@ class BDInception3(nn.Module):
             x = self.Mixed_7c(x)
             # 6 x 7 x 2048
             x = F.avg_pool2d(x, kernel_size=(6, 7))
+            # x = F.avg_pool2d(x, kernel_size=(3, 7))
             # 1 x 1 x 2048
             x = F.dropout(x, training=self.training)
             # 1 x 1 x 2048

@@ -44,10 +44,10 @@ def train_LSTM():
 
 def train_CNN():
     print("="*30)
-    print("BDCNN")
+    print("BDInception3")
     # print("compressed codeword bits: {}".format(bits))
-    # train_now = True
-    train_now = False
+    train_now = True
+    # train_now = False
     no_sample = 180  # 180对应3x30场景，640对应4x80场景
     if no_sample == 90:
         batch_size = 34
@@ -56,6 +56,7 @@ def train_CNN():
     elif no_sample == 180:
         # batch_size = 45
         batch_size = 34
+        # batch_size = 44 # dataBorrow=True
         Np2extend = []  # [1, 2, 3]
         # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
         # preProcList = ['amp', 'ampRatio']
@@ -94,7 +95,9 @@ def train_CNN():
             # agent3.model_load(
             #     "breath_detect/model_save/BDInception3/2023-07-01_11-30-27-3x30-incep-sg53-ep160de82-lrm3/BDCNN_2023-07-01_11-30-27.pkl")
             agent3.model_load(
-                "breath_detect/model_save/BDInception3/2023-07-01_21-08-58-3x30-incep-borrow-amp-diffPha-sg53-ep80de40-lrm3/BDCNN_2023-07-01_21-08-58.pkl")
+                "breath_detect/model_save/BDInception3/2023-07-01_21-08-58-3x30-incep-borrow-amp-diffPha-sg53-ep80de40-lrm3/BDCNN_2023-07-01_21-08-58.pkl")# 13.90
+            # agent3.model_load(
+            #     "breath_detect/model_save/BDInception3/2023-07-02_16-15-07-3x30-incep-borrow-amp-diffPha-sg87-ep80de40-lrm3/BDCNN_2023-07-02_16-15-07.pkl")
         elif no_sample == 640:
             # agent3.model_load("breath_detect/model_save/2023-06-23_14-20-22sc14p95-idepStdDiffPhase-4x80-ep160/BDCNN_2023-06-23_14-20-22.pkl")
             # agent3.model_load("breath_detect/model_save/2023-06-28_20-11-13-640-inputSg53/BDCNN_2023-06-28_20-11-13.pkl")  # best
