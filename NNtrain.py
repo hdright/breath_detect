@@ -44,11 +44,19 @@ def train_LSTM():
 
 def train_CNN():
     print("="*30)
-    print("BDInception3")
     # print("compressed codeword bits: {}".format(bits))
-    train_now = True
-    # train_now = False
+    # train_now = True # TODO
+    train_now = False
     no_sample = 270  # 180对应3x30场景，640对应4x80场景
+    # net = "BDInception3"
+    net = "BDCNN"
+    print("net: ", net)
+    if net == "BDCNN":
+        lr = 1e-4
+        dataBorrow = False
+    else:
+        lr = 1e-3
+        dataBorrow = True
     if no_sample == 90:
         batch_size = 34
         Np2extend = []  # [2, 3]
@@ -74,21 +82,21 @@ def train_CNN():
         Np2extend = []
         # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
         preProcList = ['amp', 'diffPha']
-    agent3 = CNN_trainer(epochs=80,
+    agent3 = CNN_trainer(epochs=160,# TODO
                         #   net="BDCNN",
-                         net="BDInception3",
+                         net=net,
                          train_now=train_now,
                          no_sample=no_sample,
                          pre_sg=[5, 3],  # 数据预处理的savgol参数
-                         dataBorrow=True, # 3x30场景是否借用4x80场景数据进行训练
+                         dataBorrow=dataBorrow, # 3x30场景是否借用4x80场景数据进行训练
                          preProcList=preProcList,  # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
                          Np2extend=Np2extend,  # 对Np=？的数据进行扩展
                          aux_logits=False,
                          BPMresol=0.1,
                          breathEnd=1,
                          batch_size=batch_size,
-                         learning_rate=1e-3,  # 学习率
-                         lr_decay_freq=40,  # 多少个epoch衰减
+                         learning_rate=lr,  # 学习率
+                         lr_decay_freq=80,  # 多少个epoch衰减# TODO
                          lr_decay=0.1,
                          num_workers=0,
                          print_freq=1,
@@ -106,6 +114,8 @@ def train_CNN():
                 "breath_detect/model_save/BDInception3/2023-07-01_21-08-58-3x30-incep-borrow-amp-diffPha-sg53-ep80de40-lrm3/BDCNN_2023-07-01_21-08-58.pkl")# 13.90
             # agent3.model_load(
             #     "breath_detect/model_save/BDInception3/2023-07-02_16-15-07-3x30-incep-borrow-amp-diffPha-sg87-ep80de40-lrm3/BDCNN_2023-07-02_16-15-07.pkl")
+        elif no_sample == 270:
+            agent3.model_load("breath_detect/model_save/BDCNN/b2023-07-03_15-20-38-3x30BDCNN-amp-diffPha-diffSani-sg53-ep160de80-lrm4/BDCNN_2023-07-03_15-20-38.pkl")#12.08
         elif no_sample == 640:
             # agent3.model_load("breath_detect/model_save/2023-06-23_14-20-22sc14p95-idepStdDiffPhase-4x80-ep160/BDCNN_2023-06-23_14-20-22.pkl")
             # agent3.model_load("breath_detect/model_save/2023-06-28_20-11-13-640-inputSg53/BDCNN_2023-06-28_20-11-13.pkl")  # best

@@ -294,11 +294,18 @@ class BDCNN(nn.Module):
             # softmax输出分类
             # self.softmax = nn.Softmax(dim=1)
         else:
+            if input_sample % 90 == 0:
+                if input_sample // 90 == 2:
+                    inchannels = 2
+                else:
+                    inchannels = 3
+            else:
+                inchannels = 2
             ## 第一层卷积
             self.conv1 = nn.Sequential(
                 # 输入[1,320,600]
                 nn.Conv2d(
-                    in_channels=2,    # 输入图片的高度
+                    in_channels=inchannels,    # 输入图片的高度
                     out_channels=64,  # 输出图片的高度
                     kernel_size=(18,35),    # 16*35的卷积核，相当于过滤器
                     stride=(4,5),         # 卷积核在图上滑动，每隔个扫一次

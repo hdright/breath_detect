@@ -13,7 +13,7 @@
 import os, time
 import numpy as np
 from itertools import accumulate
-from estBreath import estChusai, estMultisense
+from estBreath import estChusai, estMultisense, estSani
 #numpy 1.19
 
 
@@ -90,7 +90,8 @@ class SampleSet:
         for ii in range(self.Cfg['Nsamp']):
             # br = EstBreathRate(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
             # br = estChusai(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
-            br = estMultisense(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
+            br = estSani(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
+            # br = estMultisense(self.Cfg, self.CSI_s[ii], ii)  ## 呼吸率估计
             BR.append(br)
         self.Rst = BR
 
@@ -166,7 +167,7 @@ if __name__ == "__main__":
     PathSet = {0:"./TestData", 1:"./CompetitionData1", 2:"./CompetitionData2", 3:"./CompetitionData3", 4:"./CompetitionData4"}
     PrefixSet = {0:"Test" , 1:"Round1", 2:"Round2", 3:"Round3", 4:"Round4"}
 
-    Ridx = 1 # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
+    Ridx = 3 # 设置比赛轮次索引，指明数据存放目录。0:Test; 1: 1st round; 2: 2nd round ...
     PathRaw = "./chusai_data/" + PathSet[Ridx]
     PathOut = "./outputs/" + PathSet[Ridx]
     Prefix = PrefixSet[Ridx]

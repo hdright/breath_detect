@@ -166,6 +166,7 @@ class CNN_trainer():
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_stdamp_indepStdDiffPha_gaussianlabelsig1_180ronly001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # best 2nd
+            train001_270 = './chusai_data/TestData/train_270_sg53_stdampfft_nostdamp_indepStdDiffPhaAndDiffSani_gaussianlabelsig100_180only001_nostretch.pkl'  
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # best
             train001_270_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdDiffPhaAndDiffSani_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # 
@@ -189,7 +190,7 @@ class CNN_trainer():
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
             train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhaseAndDiffSani_gausssig100.pkl'  # best
             train180640 = './chusai_data/TestData/train_shuffle_180noStdAmp_640stdAmp_indepStdDiffPhase_gausssig100.pkl'  # very bad
-            train_pkl = train001_270_borrow
+            train_pkl = train001_270
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -407,7 +408,10 @@ class CNN_trainer():
                 # x_in = torch.unsqueeze(x_in, 1) # [batch=1, 1, 320, 600]
                 print("=====================================")
                 if self.net == "BDCNN" or self.net == "BDInception3":
-                    avg_time = 1
+                    if self.net == "BDCNN":
+                        avg_time = 100 # TODO(best 100)
+                    else:
+                        avg_time = 1
                     pred_val_list = []
                     # 获取当前字符串
                     pic_time = str(i_test)
@@ -431,7 +435,7 @@ class CNN_trainer():
                                     idx, _ = find_peaks(
                                         output_sg, distance=3/self.BPMresol)
                                 # idx, _ = find_peaks(
-                                #     output_sg, distance=3/self.BPMresol)
+                                #     output_sg, distance=3/self.BPMresol) # TODO 
                                 # 排除超出self.bpmMinMax范围的峰值索引
                                 if cfg['Np'] == 1:
                                     idx = idx[(idx * self.BPMresol > self.bpmMinMax[0]) & (

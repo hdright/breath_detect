@@ -84,6 +84,55 @@ def hampel(X, k):
     xf[xi] = xmedian[xi]
     return xf
 
+# 注意，csi的维度为M*N*T,rx*sc*T
+pi = np.pi
+def CSI_sanitization(csi):
+    '''
+    CSI线性相位去噪
+
+    Parameters
+    ----------
+    csi : np.array
+        CSI时域数据，维度为Nrx*Nsc*Nt
+
+    Returns
+    -------
+    csi_phase : np.array
+        CSI线性相位去噪后的数据，维度为Nrx*Nsc*Nt
+    '''
+    M, N, T = csi.shape  # 接收天线数量M
+    fi = 1250 * 2  # 子载波间隔1250khz * 2
+    csi_phase = np.zeros((M, N, T))
+    for t in range(T):  # 遍历时间戳上的CSI包，每根天线上都有N个子载波
+        csi_phase[0, :, t] = np.unwrap(np.angle(csi[0, :, t]))
+        csi_phase[1, :, t] = np.unwrap(csi_phase[0, :, t] + np.angle(csi[1, :, t] * np.conj(csi[0, :, t])))
+        csi_phase[2, :, t] = np.unwrap(csi_phase[1, :, t] + np.angle(csi[2, :, t] * np.conj(csi[1, :, t])))
+        if M == 8:
+            csi_phase[3, :, t] = np.unwrap(csi_phase[2, :, t] + np.angle(csi[3, :, t] * np.conj(csi[2, :, t])))
+            csi_phase[4, :, t] = np.unwrap(csi_phase[3, :, t] + np.angle(csi[4, :, t] * np.conj(csi[3, :, t])))
+            csi_phase[5, :, t] = np.unwrap(csi_phase[4, :, t] + np.angle(csi[5, :, t] * np.conj(csi[4, :, t])))
+            csi_phase[6, :, t] = np.unwrap(csi_phase[5, :, t] + np.angle(csi[6, :, t] * np.conj(csi[5, :, t])))
+            csi_phase[7, :, t] = np.unwrap(csi_phase[6, :, t] + np.angle(csi[7, :, t] * np.conj(csi[6, :, t])))
+        ai = np.tile(2 * pi * fi * np.array(range(N)), M)
+        bi = np.ones(M * N)
+        if M == 3:
+            ci = np.concatenate((csi_phase[0, :, t], csi_phase[1, :, t], csi_phase[2, :, t]))
+        elif M == 8:
+            ci = np.concatenate((csi_phase[0, :, t], csi_phase[1, :, t], csi_phase[2, :, t], csi_phase[3, :, t],
+                                 csi_phase[4, :, t], csi_phase[5, :, t], csi_phase[6, :, t], csi_phase[7, :, t]))
+        else:
+            ci = np.concatenate((csi_phase[0, :, t], csi_phase[1, :, t]))
+            raise Exception("M must be 3 or 8")
+        A = np.dot(ai, ai)
+        B = np.dot(ai, bi)
+        C = np.dot(bi, bi)
+        D = np.dot(ai, ci)
+        E = np.dot(bi, ci)
+        rho_opt = (B * E - C * D) / (A * C - B ** 2)
+        beta_opt = (B * D - A * E) / (A * C - B ** 2)
+        temp = np.tile(np.array(range(N)), M).reshape(M, N)
+        csi_phase[:, :, t] = csi_phase[:, :, t] + 2 * pi * fi * temp * rho_opt + beta_opt
+    return csi_phase
 
 def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
     '''
@@ -153,7 +202,74 @@ def estChusai(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
     ret = np.sort(np.squeeze(freqs[:Np], axis=1))
     return ret
 
+def estSani(Cfg: dict, CSI: np.ndarray, iSamp: int = 0) -> np.ndarray:
+    '''
+    估计每个4D CSI样本的呼吸率，需参设者自行设计
+    :param Cfg: CfgX文件中配置信息，dict
+    :param CSI: 4D CSi数据 [NRx][NTx][NSc][NT]
+    :iSamp: 本次估计Sample集合中第iSamp个样本
+    :return:呼吸率估计结果， 长度为Np的numpy数组
+    '''
+    # np.save("CSI%d.npy" % iSamp, CSI)
+    Np, Nrx, Ntx, Nsc, Nt, Tdur = Cfg["Np"][iSamp], Cfg["Nrx"], Cfg["Ntx"], Cfg["Nsc"], Cfg["Nt"][iSamp], Cfg["Tdur"][iSamp]
 
+    fs = Nt / Tdur  # 采样频率
+    BPMresol = 1
+    resol = BPMresol / 60  # 要分辨出0.1BPM，需要的频率分辨率
+    Ndft = int(fs / resol)  # DFT点数
+
+    breathEnd = 0.9  # 呼吸最高频率 Hz
+    dftSize = int(breathEnd / resol)  # DFT宽度
+
+    m, n = np.meshgrid(np.arange(Nt), np.arange(dftSize))
+    Wdft = np.exp(-1j * 2 * np.pi * m * n / Ndft)  # dft 矩阵
+
+    Hs = np.zeros((dftSize), dtype=complex)
+
+    filteredHs = np.zeros_like(Hs)
+    ret = np.array([0])
+    BPMrange = [[14, 26], [9, 40], [5, 50]]
+    if Np > 1:
+        BPMrange = [[8, 32], [5, 50]]
+    BPMrangeI = 0
+
+    # 用取最大的三个峰值求加权平均
+    freqs = []
+    weights = []
+    CSI_sani = CSI_sanitization(np.squeeze(CSI))
+    for rx in range(Nrx):
+        for tx in range(Ntx):
+            for sc in range(Nsc):
+                csi_norm = CSI_sani[rx][sc] - CSI_sani[(rx + 1) % Nrx][sc]
+                denoised = savgol_filter(csi_norm, 8, 7)  # 用Savitzky-Golay滤波器去噪
+                amp = scale(denoised)  # z-score 归一化
+                
+                psd = np.abs(Wdft @ amp)  # 用 DFT 变换到频域
+                # pha = scale(np.angle(denoised))
+                # n = len(psd)
+                # autor = np.correlate(psd, psd, mode="full")[n-1:]
+                for BPMrangeI in range(len(BPMrange)):
+                    minBPM, maxBPM = BPMrange[BPMrangeI]
+                    minIndex, maxIndex = int(minBPM / BPMresol), int(maxBPM / BPMresol)
+                    filteredHs = np.zeros_like(Hs, dtype=np.float64)
+                    filteredHs[minIndex: maxIndex] =psd[minIndex:maxIndex]
+                    idx, _ = find_peaks(filteredHs, height=0.001, distance=3 / BPMresol)
+                    if len(idx) < 1:
+                        continue
+                    highestPeak = np.argsort(-filteredHs[idx])
+                    for i in range(min(len(idx), 4)):
+                        if Np > i / 2:
+                            freqs.append(idx[highestPeak[i]] * BPMresol)
+                            weights.append(filteredHs[idx[highestPeak[i]]])
+                    break
+    # 用带权重的KMeans 聚类
+    kmeans = KMeans(n_clusters=Np, tol=3.5, n_init="auto").fit(np.array([freqs]).T, sample_weight=weights)
+    # 将频率按类内数量排序
+    cnt = np.bincount(kmeans.labels_)
+    freqs = kmeans.cluster_centers_[np.argsort(-cnt)]
+
+    ret = np.sort(np.squeeze(freqs[:Np], axis=1))
+    return ret
 
 def calcRER(CSIf: np.ndarray, fHigh: float) -> float:
     '''
