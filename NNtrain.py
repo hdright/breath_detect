@@ -48,7 +48,7 @@ def train_CNN():
     # print("compressed codeword bits: {}".format(bits))
     train_now = True
     # train_now = False
-    no_sample = 180  # 180对应3x30场景，640对应4x80场景
+    no_sample = 270  # 180对应3x30场景，640对应4x80场景
     if no_sample == 90:
         batch_size = 34
         Np2extend = []  # [2, 3]
@@ -61,6 +61,14 @@ def train_CNN():
         # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
         # preProcList = ['amp', 'ampRatio']
         preProcList = ['amp', 'diffPha']
+    elif no_sample == 960:
+        batch_size = 32
+        Np2extend = []
+        preProcList = ['amp', 'diffPha', 'diffSani']
+    elif no_sample == 270:
+        batch_size = 34
+        Np2extend = []
+        preProcList = ['amp', 'diffPha', 'diffSani']
     else:
         batch_size = 32  # 320长度的数据共有416种情况, 90长度的数据共有68种情况
         Np2extend = []

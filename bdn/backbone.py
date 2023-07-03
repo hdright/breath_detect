@@ -65,9 +65,10 @@ class BDInception3(nn.Module):
         self.aux_logits = aux_logits
         self.input_sample = input_sample
         # self.transform_input = transform_input
-        assert self.input_sample in [180, 640]
-        if input_sample == 640:
-            self.Conv2d_1a_3x3 = BasicConv2d(2, 32, kernel_size=40, stride=(2, 4))
+        assert self.input_sample in [180, 640, 270, 960]
+        if input_sample % 320 == 0:
+            input_axis0 = input_sample // 320
+            self.Conv2d_1a_3x3 = BasicConv2d(input_axis0, 32, kernel_size=40, stride=(2, 4))
             self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3)
             self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, padding=1)
             self.Conv2d_3b_1x1 = BasicConv2d(64, 80, kernel_size=1)
@@ -87,7 +88,8 @@ class BDInception3(nn.Module):
             self.Mixed_7c = InceptionE(2048)
             self.fc = nn.Linear(2048, output_size)
         else:
-            self.Conv2d_1a_3x3 = BasicConv2d(2, 32, kernel_size=(30, 40), stride=(1, 4))
+            input_axis0 = input_sample // 90
+            self.Conv2d_1a_3x3 = BasicConv2d(input_axis0, 32, kernel_size=(30, 40), stride=(1, 4))
             # self.Conv2d_1a_3x3 = BasicConv2d(2, 32, kernel_size=(16, 40), stride=(1, 4))
             self.Conv2d_2a_3x3 = BasicConv2d(32, 32, kernel_size=3)
             self.Conv2d_2b_3x3 = BasicConv2d(32, 64, kernel_size=3, padding=1)
@@ -126,7 +128,7 @@ class BDInception3(nn.Module):
         #     x[:, 0] = x[:, 0] * (0.229 / 0.5) + (0.485 - 0.5) / 0.5
         #     x[:, 1] = x[:, 1] * (0.224 / 0.5) + (0.456 - 0.5) / 0.5
         #     x[:, 2] = x[:, 2] * (0.225 / 0.5) + (0.406 - 0.5) / 0.5
-        if self.input_sample == 640:
+        if self.input_sample % 320 == 0:
             # 320 x 600 x 2
             x = self.Conv2d_1a_3x3(x)
             # 141 x 141 x 32

@@ -168,8 +168,9 @@ class CNN_trainer():
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180only001_nostretch.pkl'  # best 2nd
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_nostdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
             train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # best
+            train001_270_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdDiffPhaAndDiffSani_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # 
             # train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg87_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # 
-            train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_uniStdAmp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' #
+            # train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_uniStdAmp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' #
             # train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow-batch44_sg53_stdampfft_nostdamp_indepStdDiffPha_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' # 
             # train001_180_borrow = './chusai_data/TestData/train_shuffle_borrow_sg53_stdampfft_nostdamp_indepStdAmpRa_gaussianlabelsig100_180-3to6-5to35_nostretch.pkl' 
             # train001_180 = './chusai_data/TestData/train_shuffle_sg53_stdampfft_indepStdamp_indepStdAmpRa_gaussianlabelsig100_180only001_nostretch.pkl'  # 
@@ -186,8 +187,9 @@ class CNN_trainer():
             train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig100.pkl'  # best
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_indepStdAmpRatio_indepStdDiffPhase_gausssig100.pkl'  # 
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
+            train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhaseAndDiffSani_gausssig100.pkl'  # best
             train180640 = './chusai_data/TestData/train_shuffle_180noStdAmp_640stdAmp_indepStdDiffPhase_gausssig100.pkl'  # very bad
-            train_pkl = train001_180_borrow
+            train_pkl = train001_270_borrow
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -513,11 +515,11 @@ class CNN_trainer():
                     save_data_to_txt(pred_val_file, na_last, Ridx)
                     pred_val_file = []
                     na_last = cfg['na']
-                if self.no_sample % 90 == 0:
-                    if cfg['Np'] == 3:
-                        pred_val[2] += 3
-                    elif cfg['Np'] == 2:
-                        pred_val[1] += 3
+                # if self.no_sample % 90 == 0:
+                #     if cfg['Np'] == 3:
+                #         pred_val[2] += 3
+                #     elif cfg['Np'] == 2:
+                #         pred_val[1] += 3
                 pred_val_file.append(pred_val)
             save_data_to_txt(pred_val_file, cfg['na'], Ridx)
 
