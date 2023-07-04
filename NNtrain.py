@@ -90,7 +90,7 @@ def train_CNN():
         # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
         preProcList = ['amp', 'diffPha']
     print("preProcList: ", preProcList)
-    agent3 = CNN_trainer(epochs=80,# TODO
+    agent3 = CNN_trainer(epochs=72,# TODO
                         #   net="BDCNN",
                          net=net,
                          train_now=train_now,
