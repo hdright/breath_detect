@@ -45,9 +45,9 @@ def train_LSTM():
 def train_CNN():
     print("="*30)
     # print("compressed codeword bits: {}".format(bits))
-    train_now = True # TODO
-    # train_now = False
-    no_sample = 960  # TODO 180对应3x30场景，640对应4x80场景
+    # train_now = True # TODO
+    train_now = False
+    no_sample = 640  # TODO 180对应3x30场景，640对应4x80场景
     net = "BDInception3" # TODO
     # net = "BDCNN"
     print("net: ", net)
@@ -74,6 +74,7 @@ def train_CNN():
         Np2extend = []
         # preProcList = ['amp', 'diffPha', 'diffSani']
         preProcList = ['amp', 'diffPha', 'ampRaBnr']
+        preProcList = ['amp', 'diffPha', 'ampRatio']
         bnr_range = [6, 45]
     elif no_sample == 270:
         batch_size = 34
@@ -100,7 +101,7 @@ def train_CNN():
                          breathEnd=1,
                          batch_size=batch_size,
                          learning_rate=lr,  # 学习率
-                         lr_decay_freq=80,  # 多少个epoch衰减# TODO
+                         lr_decay_freq=40,  # 多少个epoch衰减# TODO
                          lr_decay=0.1,
                          num_workers=0,
                          print_freq=1,
@@ -122,9 +123,10 @@ def train_CNN():
             agent3.model_load("breath_detect/model_save/BDCNN/b2023-07-03_15-20-38-3x30BDCNN-amp-diffPha-diffSani-sg53-ep160de80-lrm4/BDCNN_2023-07-03_15-20-38.pkl")#12.08
         elif no_sample == 640:
             # agent3.model_load("breath_detect/model_save/2023-06-23_14-20-22sc14p95-idepStdDiffPhase-4x80-ep160/BDCNN_2023-06-23_14-20-22.pkl")
-            # agent3.model_load("breath_detect/model_save/2023-06-28_20-11-13-640-inputSg53/BDCNN_2023-06-28_20-11-13.pkl")  # best
-            agent3.model_load(
-                "breath_detect/model_save/2023-06-30_11-57-04-datasg53-ampRatio-3x30-BN-ep160/BDCNN_2023-06-30_11-57-04.pkl")
+            # agent3.model_load("breath_detect/model_save/2023-06-28_20-11-13-640-inputSg53/BDCNN_2023-06-28_20-11-13.pkl")  
+            # agent3.model_load(
+            #     "breath_detect/model_save/2023-06-30_11-57-04-datasg53-ampRatio-3x30-BN-ep160/BDCNN_2023-06-30_11-57-04.pkl")
+            agent3.model_load("breath_detect/model_save/BDInception3/2023-06-30_19-29-58-4x80-incep-sg53-ep80de59-lrm3/BDCNN_2023-06-30_19-29-58.pkl")# best
         elif no_sample == 180640:
             agent3.model_load(
                 "breath_detect/model_save/2023-06-28_18-24-59-180640-90extend/BDCNN_2023-06-28_18-24-59.pkl")

@@ -192,6 +192,7 @@ class CNN_trainer():
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
             # train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhaseAndDiffSani_gausssig100.pkl'  # 
             train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRaBnr_gausssig100.pkl'  
+            train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRa_gausssig100.pkl'  
             train180640 = './chusai_data/TestData/train_shuffle_180noStdAmp_640stdAmp_indepStdDiffPhase_gausssig100.pkl'  # very bad
             train_pkl = train002009_960
             if os.path.exists(train_pkl):
@@ -396,7 +397,7 @@ class CNN_trainer():
             num_workers=2,  # 设置读取数据的线程数量
         )
         self.model.eval()
-        if self.net == "BDCNN":
+        if self.net == "BDCNN" or self.net == "BDInception3": # TODO
             self.model.apply(apply_dropout)  # eval时依然使用dropout
         with torch.no_grad():
             pred_val_file = []  # 每个文件的预测值列表
@@ -417,7 +418,7 @@ class CNN_trainer():
                     if self.net == "BDCNN":
                         avg_time = 100 # TODO(best 100)
                     else:
-                        avg_time = 1
+                        avg_time = 10
                     pred_val_list = []
                     # 获取当前字符串
                     pic_time = str(i_test)
