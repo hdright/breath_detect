@@ -47,7 +47,7 @@ def train_CNN():
     # print("compressed codeword bits: {}".format(bits))
     train_now = True # TODO
     # train_now = False
-    no_sample = 270  # 180对应3x30场景，640对应4x80场景
+    no_sample = 960  # TODO 180对应3x30场景，640对应4x80场景
     net = "BDInception3" # TODO
     # net = "BDCNN"
     print("net: ", net)
@@ -74,11 +74,11 @@ def train_CNN():
         Np2extend = []
         # preProcList = ['amp', 'diffPha', 'diffSani']
         preProcList = ['amp', 'diffPha', 'ampRaBnr']
+        bnr_range = [6, 45]
     elif no_sample == 270:
         batch_size = 34
         Np2extend = []
         preProcList = ['amp', 'diffPha', 'diffSani']
-        bnr_range = [6, 45]
     else:
         batch_size = 32  # 320长度的数据共有416种情况, 90长度的数据共有68种情况
         Np2extend = []
