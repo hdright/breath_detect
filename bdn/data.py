@@ -495,8 +495,8 @@ class BreathDataset(Dataset):
                     csiAxis2Fft = axis2FftScaler.fit_transform(csiAxis2Fft.T).T
                     csiAxis2Fft = np.expand_dims(csiAxis2Fft, axis=0)
                     csiFft = np.concatenate((csiFft, csiAxis2Fft), axis=0)
-                else:
-                    csiFft = csiAxis0Fft
+                # else:
+                #     csiFft = csiAxis0Fft
                 # # CSIfft按列标准化
                 # csiAxis0Fft = axis0FftScaler.fit_transform(csiAxis0Fft)
                 # csiAxis1Fft = axis1FftScaler.fit_transform(csiAxis1Fft)
