@@ -397,7 +397,7 @@ class CNN_trainer():
             num_workers=2,  # 设置读取数据的线程数量
         )
         self.model.eval()
-        if self.net == "BDCNN" or self.net == "BDInception3": # TODO
+        if self.net == "BDCNN": # TODO
             self.model.apply(apply_dropout)  # eval时依然使用dropout
         with torch.no_grad():
             pred_val_file = []  # 每个文件的预测值列表
@@ -418,7 +418,7 @@ class CNN_trainer():
                     if self.net == "BDCNN":
                         avg_time = 100 # TODO(best 100)
                     else:
-                        avg_time = 10
+                        avg_time = 1
                     pred_val_list = []
                     # 获取当前字符串
                     pic_time = str(i_test)

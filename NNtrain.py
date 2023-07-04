@@ -45,9 +45,9 @@ def train_LSTM():
 def train_CNN():
     print("="*30)
     # print("compressed codeword bits: {}".format(bits))
-    # train_now = True # TODO
-    train_now = False
-    no_sample = 640  # TODO 180对应3x30场景，640对应4x80场景
+    train_now = True # TODO
+    # train_now = False
+    no_sample = 960  # TODO 180对应3x30场景，640对应4x80场景
     net = "BDInception3" # TODO
     # net = "BDCNN"
     print("net: ", net)
