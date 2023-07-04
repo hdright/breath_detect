@@ -435,10 +435,10 @@ class CNN_trainer():
                             if self.no_sample % 90 == 0:
                                 if cfg['Np'] == 2:
                                     idx, _ = find_peaks(
-                                        output_sg, distance=9/self.BPMresol)  # 3x30场景，复赛间隔6
+                                        output_sg, distance=8/self.BPMresol)  # 3x30场景，间隔8
                                 elif cfg['Np'] == 3:
                                     idx, _ = find_peaks(
-                                        output_sg, distance=5/self.BPMresol)
+                                        output_sg, distance=6/self.BPMresol)
                                 else:
                                     idx, _ = find_peaks(
                                         output_sg, distance=3/self.BPMresol)
