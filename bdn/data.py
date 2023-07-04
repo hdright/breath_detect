@@ -250,8 +250,7 @@ class BreathDataset(Dataset):
             if Round == 3 or Round == 2:
                 names = self.names[1:3]
             else:
-                # names = self.names[1:9]
-                names = [self.names[1], self.names[4]] # TODO
+                names = self.names[1:9]
         elif no_sample in [90320,180640]: # 将90*600的fft矩阵扩展为320*600
             if Round == 3 or Round == 2:
                 names = self.names
