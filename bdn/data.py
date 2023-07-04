@@ -391,6 +391,8 @@ class BreathDataset(Dataset):
                     csiDiffPhaFft = np.abs(csiDiffPhaFft)
                 if self.loadDiffSani:
                     csiDiffSaniFft = np.abs(csiDiffSaniFft)
+                if self.loadAmpRaBnr:
+                    csiAmpRaBnrFft = np.abs(csiAmpRaBnrFft)
                 # if no_sample == 90320 or no_sample == 90:
                 match self.preProcList[0]:
                     case 'amp':
