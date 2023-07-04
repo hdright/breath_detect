@@ -67,6 +67,43 @@ def CSI_sanitization(csi):
         csi_phase[:, :, t] = csi_phase[:, :, t] + 2 * pi * fi * temp * rho_opt + beta_opt
     return csi_phase
 
+def cal_BNR(dft, BPMrange, BPMresol):
+    '''
+    计算在BPMrange范围内的BNR，即dft的BPMrange范围内具有最大能量的 FFT bin，
+    然后通过将该 bin 的能量除以所有 FFT bin 的能量总和来计算 BNR
+
+    Parameters
+    ----------
+    dft : np.array
+        m*n数组，为m行n点FFT投影的结果
+    '''
+    minIdx, maxIdx = int(BPMrange[0] / BPMresol), int(BPMrange[1] // BPMresol)
+    # 能量等于dft的绝对值的平方的和
+    dft_amp = np.abs(dft)
+    dft_resp = dft_amp[:, minIdx:maxIdx]
+    maxBin = np.argmax(dft_resp, axis=1)
+    # 按行求BNR
+    # BNR = (dft_resp[:, maxBin] ** 2) / np.sum(dft_amp ** 2, axis=1)
+    BNR = np.array([dft_resp[i, maxBin[i]] ** 2 for i in range(dft.shape[0])]) / np.sum(dft_amp ** 2, axis=1)
+    return BNR
+
+
+def matching_val_select(csi, nDft, dftSize, BPMrange=[6, 45], BPMresol=0.1):
+    '''
+    计算csi在角度0-99/50*pi上的投影，计算DFT，取使BNR最大的角度
+    '''
+    angMat = np.array([np.cos(np.linspace(0, 2 * np.pi, 100)),
+                          np.sin(np.linspace(0, 2 * np.pi, 100))]) # shape:2*100
+    # 将csi拆分为第一行为实部，第二行为虚部的矩阵
+    csiMat = np.array([np.real(csi), np.imag(csi)]) # shape:2*Nt
+    # 计算csi在角度0-99/50*pi上的投影
+    csiProj = np.dot(angMat.T, csiMat)
+    dftProj = np.fft.fft(csiProj, axis=1, n=nDft)[:, :dftSize]
+    # 取使BNR最大的角度
+    bnrMat = cal_BNR(dftProj, BPMrange=BPMrange, BPMresol=BPMresol)
+    maxIdx = np.argmax(bnrMat)
+    return dftProj[maxIdx, :]
+
 def fft_shift_extend(data, shift, BPMrange, BPMresol):
     '''
     将x的minIndex, maxIndex区间的值循环右移，右移长度为shift/BPMresol个单位
@@ -124,7 +161,7 @@ def generate_gaussian_pulses(noBpmPoints, BPMresol, cfg, shift=0):
         gt_pd += np.exp(-(x - mu) ** 2 / (2 * sigma2)) / np.sqrt(2 * np.pi * sigma2) / cfg['Np']
     return gt_pd
 
-allDataFormats = ['amp', 'diffPha', 'ampRatio', 'pha', 'diffSani']
+allDataFormats = ['amp', 'diffPha', 'ampRatio', 'pha', 'diffSani', 'ampRaBnr']
 
 class BreathDataset(Dataset):
     def __init__(self, Round: int, 
@@ -136,6 +173,7 @@ class BreathDataset(Dataset):
                  dataBorrow: bool = False, # 3x30场景是否借用4x80场景数据进行训练
                  preProcList: list = ['amp', 'diffPha'], # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
                  pre_sg: list = [8, 7], # savgol_filter参数
+                 bnr_range: list = [6, 45], # BNR计算范围
                  Np2extend: list = []): # 通过循环移位扩充3x30场景数据
         self.path = path
         self.round = Round
@@ -166,6 +204,7 @@ class BreathDataset(Dataset):
         self.loadDiffPha = 'diffPha' in self.preProcList
         self.loadPha = 'pha' in self.preProcList
         self.loadDiffSani = 'diffSani' in self.preProcList
+        self.loadAmpRaBnr = 'ampRaBnr' in self.preProcList
 
         PathRaw = os.path.join(path, PathSet[Round])
         Prefix = PrefixSet[Round]
@@ -296,6 +335,10 @@ class BreathDataset(Dataset):
                 else:
                     csi_sanitization = np.zeros(1)
                     csiDiffSaniFft = np.zeros(1)
+                if self.loadAmpRaBnr:
+                    csiAmpRaBnrFft = np.zeros((cfg['Nrx'] * cfg['Ntx'] * cfg['Nsc'], dftSize), dtype=complex)
+                else:
+                    csiAmpRaBnrFft = np.zeros(1)
                 j = 0
                 for i in range(cfg['Nrx']):
                     for k in range(cfg['Nsc']):
@@ -332,6 +375,14 @@ class BreathDataset(Dataset):
                             csiDiffSaniFft[i * cfg['Nsc'] + k] = np.fft.fft(scale(savgol_filter(
                                 csi_sanitization[i][k] - csi_sanitization[(i+1)%cfg['Nrx']][k], 
                                 savgol_window_length, savgol_polyorder)), Ndft)[:dftSize]
+                        if self.loadAmpRaBnr:
+                            csi_ratio_amp = scale(savgol_filter(np.abs(CSI_sam[i, j, k, :]/
+                                                                        np.where(CSI_sam[(i+1)%cfg['Nrx'], j, k, :] == 0, 
+                                                                                1, CSI_sam[(i+1)%cfg['Nrx'], j, k, :])), 
+                                                                savgol_window_length, savgol_polyorder))
+                            csi_ratio_phase = np.angle(CSI_sam[i, j, k, :]) - np.angle(CSI_sam[(i+1)%cfg['Nrx'], j, k, :])
+                            csi_ratio = csi_ratio_amp * np.exp(1j * csi_ratio_phase)
+                            csiAmpRaBnrFft[i * cfg['Nsc'] + k] = matching_val_select(csi_ratio, Ndft, dftSize, BPMrange=bnr_range)
                 if self.loadAmpRa:
                     csiAmpRaFft = np.abs(csiAmpRaFft)
                 if self.loadAmp:
@@ -352,6 +403,8 @@ class BreathDataset(Dataset):
                     #     pass
                     case 'diffSani':
                         csiAxis0Fft = csiDiffSaniFft
+                    case 'ampRaBnr':
+                        csiAxis0Fft = csiAmpRaBnrFft
                     case _:
                         csiAxis0Fft = csiDiffPhaFft
                         raise ValueError('preProcList[0] error')
@@ -367,6 +420,8 @@ class BreathDataset(Dataset):
                         #     pass
                         case 'diffSani':
                             csiAxis1Fft = csiDiffSaniFft
+                        case 'ampRaBnr':
+                            csiAxis1Fft = csiAmpRaBnrFft
                         case _:
                             csiAxis1Fft = csiDiffPhaFft
                             raise ValueError('preProcList[1] error')
@@ -384,6 +439,8 @@ class BreathDataset(Dataset):
                         #     pass
                         case 'diffSani':
                             csiAxis2Fft = csiDiffSaniFft
+                        case 'ampRaBnr':
+                            csiAxis2Fft = csiAmpRaBnrFft
                         case _:
                             csiAxis2Fft = csiDiffPhaFft
                             raise ValueError('preProcList[2] error')
@@ -524,6 +581,7 @@ def load_data_from_txt(
         batch_size = 1, # 设置batch大小
         shuffle = True, # 设置是否打乱数据
         num_workers = 0, # 设置读取数据的线程数量
+        bnr_range = [6, 45] # 设置BNR读取的bin范围
 ):
     """
     从txt文件中读取数据
@@ -542,7 +600,8 @@ def load_data_from_txt(
         设置读取数据的线程数量, by default 0
     """
     train_set = BreathDataset(Ridx, BPMresol=BPMresolution, no_sample=no_sample, Np2extend=Np2extend, 
-                              pre_sg=pre_sg, preProcList=preProcList, dataBorrow=dataBorrow)
+                              pre_sg=pre_sg, preProcList=preProcList, dataBorrow=dataBorrow, 
+                              bnr_range = bnr_range)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
     return train_loader
 

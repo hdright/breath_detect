@@ -78,6 +78,7 @@ class CNN_trainer():
                  preProcList=['amp', 'diffPha'], # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
                  pre_sg = [8, 7], # 数据预处理savgol滤波器参数
                  dataBorrow=False, # 3x30场景是否借用4x80场景数据进行训练
+                 bnr_range=[6, 45], # bnrBPM的范围
                  Np2extend=[2, 3], # 训练时扩展几个人的场景的数据集
                  aux_logits=True, # 是否使用辅助分类器
                  BPMresol=1.0,
@@ -116,6 +117,7 @@ class CNN_trainer():
         self.breadthEnd = breathEnd
         # resol = BPMresol / 60  # 要分辨出0.1BPM，需要的频率分辨率
         self.bpmMinMax = [5, 50]  # 呼吸频率范围
+        self.bnr_range = bnr_range  # bnrBPM的范围
         bpmRange = np.arange(0, 60, BPMresol)
         noBpmPoints = len(bpmRange)  # 要估计的呼吸频率个数
 
@@ -188,9 +190,10 @@ class CNN_trainer():
             train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig100.pkl'  # best
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_indepStdAmpRatio_indepStdDiffPhase_gausssig100.pkl'  # 
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
-            train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhaseAndDiffSani_gausssig100.pkl'  # best
+            # train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhaseAndDiffSani_gausssig100.pkl'  # best
+            train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRaBnr_gausssig100.pkl'  # best
             train180640 = './chusai_data/TestData/train_shuffle_180noStdAmp_640stdAmp_indepStdDiffPhase_gausssig100.pkl'  # very bad
-            train_pkl = train001_270
+            train_pkl = train002009_960
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -206,6 +209,7 @@ class CNN_trainer():
                     pre_sg=self.pre_sg,  # 预处理savgol滤波器参数
                     Np2extend=self.Np2extend,  # 设置是否对90样本进行扩展
                     BPMresolution=self.BPMresol,  # 设置BPM分辨率
+                    bnr_range=self.bnr_range,  # 设置BPM范围
                     batch_size=self.batch_size,  # 设置batch大小
                     shuffle=True,  # 设置是否打乱数据
                     num_workers=2,  # 设置读取数据的线程数量
@@ -231,6 +235,7 @@ class CNN_trainer():
             print("best_rmse: ", self.best_rmse, file=f)
             print("no_sample: ", self.no_sample, file=f)
             print("BPMresol: ", self.BPMresol, file=f)
+            print("bnr_range: ", self.bnr_range, file=f)
             print("dataBorrow: ", self.dataBorrow, file=f)
             print("preProcList: ", self.preProcList, file=f)
             print("pre_sg: ", self.pre_sg, file=f)
@@ -383,6 +388,7 @@ class CNN_trainer():
             Ridx=Ridx,
             no_sample=self.no_sample,  # 设置读取哪种txt文件，90样本或者320样本
             preProcList=self.preProcList,  # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
+            bnr_range=self.bnr_range,  # 设置bnr读取哪个范围的数据
             BPMresolution=self.BPMresol,  # 设置BPM分辨率
             pre_sg=self.pre_sg,  # 预处理savgol滤波器参数
             batch_size=1,  # 设置batch大小

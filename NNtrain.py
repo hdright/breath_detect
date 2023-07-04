@@ -45,11 +45,11 @@ def train_LSTM():
 def train_CNN():
     print("="*30)
     # print("compressed codeword bits: {}".format(bits))
-    # train_now = True # TODO
-    train_now = False
+    train_now = True # TODO
+    # train_now = False
     no_sample = 270  # 180对应3x30场景，640对应4x80场景
-    # net = "BDInception3"
-    net = "BDCNN"
+    net = "BDInception3" # TODO
+    # net = "BDCNN"
     print("net: ", net)
     if net == "BDCNN":
         lr = 1e-4
@@ -72,17 +72,19 @@ def train_CNN():
     elif no_sample == 960:
         batch_size = 32
         Np2extend = []
-        preProcList = ['amp', 'diffPha', 'diffSani']
+        # preProcList = ['amp', 'diffPha', 'diffSani']
+        preProcList = ['amp', 'diffPha', 'ampRaBnr']
     elif no_sample == 270:
         batch_size = 34
         Np2extend = []
         preProcList = ['amp', 'diffPha', 'diffSani']
+        bnr_range = [6, 45]
     else:
         batch_size = 32  # 320长度的数据共有416种情况, 90长度的数据共有68种情况
         Np2extend = []
         # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
         preProcList = ['amp', 'diffPha']
-    agent3 = CNN_trainer(epochs=160,# TODO
+    agent3 = CNN_trainer(epochs=80,# TODO
                         #   net="BDCNN",
                          net=net,
                          train_now=train_now,
@@ -91,6 +93,7 @@ def train_CNN():
                          dataBorrow=dataBorrow, # 3x30场景是否借用4x80场景数据进行训练
                          preProcList=preProcList,  # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
                          Np2extend=Np2extend,  # 对Np=？的数据进行扩展
+                         bnr_range=bnr_range,  # bnr范围
                          aux_logits=False,
                          BPMresol=0.1,
                          breathEnd=1,
