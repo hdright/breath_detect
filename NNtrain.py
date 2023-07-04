@@ -61,6 +61,7 @@ def train_CNN():
         batch_size = 34
         Np2extend = []  # [2, 3]
         preProcList = ['amp']
+        bnr_range = [6, 45]
     elif no_sample == 180:
         # batch_size = 45
         batch_size = 34
@@ -69,6 +70,7 @@ def train_CNN():
         # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
         # preProcList = ['amp', 'ampRatio']
         preProcList = ['amp', 'diffPha']
+        bnr_range = [6, 45]
     elif no_sample == 960:
         batch_size = 32
         Np2extend = []
@@ -80,9 +82,11 @@ def train_CNN():
         batch_size = 34
         Np2extend = []
         preProcList = ['amp', 'diffPha', 'diffSani']
+        bnr_range = [6, 45]
     else:
         batch_size = 32  # 320长度的数据共有416种情况, 90长度的数据共有68种情况
         Np2extend = []
+        bnr_range = [6, 45]
         # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
         preProcList = ['amp', 'diffPha']
     print("preProcList: ", preProcList)
