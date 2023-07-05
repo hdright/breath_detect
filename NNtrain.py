@@ -90,7 +90,7 @@ def train_CNN():
         # 1\2种学习的数据分别用什么['amp', 'diffPha', 'ampRatio', 'pha']
         preProcList = ['amp', 'diffPha']
     print("preProcList: ", preProcList)
-    agent3 = CNN_trainer(epochs=80,# TODO
+    agent3 = CNN_trainer(epochs=75,# TODO
                         #   net="BDCNN",
                          net=net,
                          train_now=train_now,
@@ -105,7 +105,7 @@ def train_CNN():
                          breathEnd=1,
                          batch_size=batch_size,
                          learning_rate=lr,  # 学习率
-                         lr_decay_freq=40,  # 多少个epoch衰减# TODO
+                         lr_decay_freq=80,  # 多少个epoch衰减# TODO
                          lr_decay=0.1,
                          num_workers=0,
                          print_freq=1,
