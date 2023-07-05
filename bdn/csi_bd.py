@@ -527,9 +527,9 @@ class CNN_trainer():
                     save_data_to_txt(pred_val_file, na_last, Ridx)
                     pred_val_file = []
                     na_last = cfg['na']
-                # if self.no_sample % 90 == 0:
-                #     if cfg['Np'] == 3:
-                #         pred_val[2] += 3
+                if self.no_sample % 90 == 0:
+                    if cfg['Np'] == 3:
+                        pred_val[2] += 2
                 #     elif cfg['Np'] == 2:
                 #         pred_val[1] += 3
                 pred_val_file.append(pred_val)
