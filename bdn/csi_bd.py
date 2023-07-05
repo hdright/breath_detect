@@ -191,11 +191,11 @@ class CNN_trainer():
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_sg53_colStdAmpFft_indepStdAmpRatio_indepStdDiffPhase_gausssig100.pkl'  # 
             # train002009_640 = './chusai_data/TestData/train_shuffle_640_colStdAmpFft_stdAmp_indepStdDiffPhase_gausssig25.pkl' # bad
             # train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhaseAndDiffSani_gausssig100.pkl'  # 
-            # train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRaBnr_gausssig100.pkl'  
-            train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRa_gausssig100.pkl'  # best
-            train002005_960 = './chusai_data/TestData/train_shuffle_002005960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRa_gausssig100.pkl'  #
+            train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRaBnr_gausssig100.pkl'  
+            # train002009_960 = './chusai_data/TestData/train_shuffle_960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRa_gausssig100.pkl'  # best
+            # train002005_960 = './chusai_data/TestData/train_shuffle_002005960_sg53_colStdAmpFft_stdAmp_indepStdDiffPhase_ampRa_gausssig100.pkl'  #
             train180640 = './chusai_data/TestData/train_shuffle_180noStdAmp_640stdAmp_indepStdDiffPhase_gausssig100.pkl'  # very bad
-            train_pkl = train002005_960
+            train_pkl = train002009_960
             if os.path.exists(train_pkl):
                 print('Loading train_shuffle_loader...')
                 with open(train_pkl, 'rb') as f:
@@ -438,7 +438,7 @@ class CNN_trainer():
                                         output_sg, distance=8/self.BPMresol)  # 3x30场景，间隔8
                                 elif cfg['Np'] == 3:
                                     idx, _ = find_peaks(
-                                        output_sg, distance=6/self.BPMresol)
+                                        output_sg, distance=5/self.BPMresol)
                                 else:
                                     idx, _ = find_peaks(
                                         output_sg, distance=3/self.BPMresol)
