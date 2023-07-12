@@ -5,7 +5,6 @@ import torch
 import os
 import torch.nn as nn
 import random
-from bdn.data_old import load_data
 from bdn.csi_bd import CNN_trainer, LSTM_trainer
 
 gpu_list = '0'

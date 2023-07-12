@@ -18,7 +18,6 @@ from scipy.signal import find_peaks, savgol_filter
 
 # from bdn.loss import NMSE_cuda, NMSELoss, CosSimilarity, rho
 from bdn.backbone import RegLSTM, BDCNN, BDCNNold, BDCNN_ND, BDInception3
-from bdn.data_old import load_data
 from bdn.data import load_data_from_txt, save_data_to_txt
 import matplotlib.pyplot as plt
 
